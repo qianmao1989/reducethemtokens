@@ -198,4 +198,62 @@ def uninstall(
         if skel.exists():
             skel.unlink()
 
+    _remove_git_hook(root)
     return results
+
+
+# ── git hook ──────────────────────────────────────────────────────────────────
+
+_HOOK_START = "# rtt:start"
+_HOOK_END   = "# rtt:end"
+
+_HOOK_BODY = """\
+# rtt:start — keep .rtt/context.txt current on every commit
+_RTT=$(command -v rtt 2>/dev/null)
+if [ -n "$_RTT" ]; then
+    "$_RTT" update . 2>/dev/null && git add .rtt/context.txt 2>/dev/null
+fi
+# rtt:end
+"""
+
+
+def install_git_hook(repo_root: str) -> str:
+    """Install a pre-commit hook that runs `rtt update` before every commit.
+
+    Returns "created", "updated", or "skipped" (no .git dir).
+    """
+    hook_path = Path(repo_root) / ".git" / "hooks" / "pre-commit"
+    if not (Path(repo_root) / ".git").is_dir():
+        return "skipped"
+
+    if hook_path.exists():
+        existing = hook_path.read_text(encoding="utf-8")
+        if _HOOK_START in existing:
+            return "skipped"
+        new_text = existing.rstrip("\n") + "\n\n" + _HOOK_BODY
+        hook_path.write_text(new_text, encoding="utf-8")
+        hook_path.chmod(0o755)
+        return "updated"
+
+    shebang = "#!/bin/sh\n"
+    hook_path.write_text(shebang + _HOOK_BODY, encoding="utf-8")
+    hook_path.chmod(0o755)
+    return "created"
+
+
+def _remove_git_hook(repo_root: Path):
+    hook_path = repo_root / ".git" / "hooks" / "pre-commit"
+    if not hook_path.exists():
+        return
+    text = hook_path.read_text(encoding="utf-8")
+    if _HOOK_START not in text:
+        return
+    pattern = re.compile(
+        re.escape(_HOOK_START) + r".*?" + re.escape(_HOOK_END) + r"\n?",
+        re.DOTALL,
+    )
+    cleaned = pattern.sub("", text).strip()
+    if cleaned and cleaned != "#!/bin/sh":
+        hook_path.write_text(cleaned + "\n", encoding="utf-8")
+    else:
+        hook_path.unlink()

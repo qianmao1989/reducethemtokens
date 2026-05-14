@@ -18,7 +18,6 @@ EXTENSION_MAP = {
     ".cxx": "cpp",
     ".hpp": "cpp",
     ".rb": "ruby",
-    ".swift": "swift",
 }
 
 LANGUAGE_MODULES = {

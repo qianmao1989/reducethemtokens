@@ -244,12 +244,59 @@ _PY_TRANSPARENT = frozenset({
 })
 
 
+def _iter_js_iife_body(node: Node):
+    """Yield statement_block children from a top-level IIFE expression.
+
+    Handles patterns like:
+        (function($) { function show() {} })(jQuery);
+        !function() { function show() {} }();
+    """
+    # node is expression_statement — unwrap to the expression inside
+    expr = None
+    for child in node.children:
+        if child.type == "call_expression":
+            expr = child
+            break
+        if child.type == "unary_expression":
+            for sub in child.children:
+                if sub.type == "call_expression":
+                    expr = sub
+                    break
+    if not expr:
+        return
+
+    fn_node = expr.child_by_field_name("function")
+    if fn_node is None:
+        return
+
+    # Unwrap parenthesized_expression: (function() { ... })
+    if fn_node.type == "parenthesized_expression":
+        for child in fn_node.children:
+            if child.type == "function_expression":
+                fn_node = child
+                break
+
+    if fn_node.type != "function_expression":
+        return
+
+    body = fn_node.child_by_field_name("body")
+    if body and body.type == "statement_block":
+        yield from body.children
+
+
 def _iter_toplevel_nodes(root: Node, lang_name: str):
-    """Yield candidate top-level definition nodes, including those inside try/except."""
+    """Yield candidate top-level definition nodes, including transparent containers."""
     for child in root.children:
         yield child
         if lang_name == "python" and child.type in _PY_TRANSPARENT:
             yield from _iter_inside_transparent(child, depth=0)
+        elif lang_name in ("javascript", "typescript"):
+            if child.type == "expression_statement":
+                yield from _iter_js_iife_body(child)
+            elif child.type in ("statement_block", "ERROR"):
+                # Bare block statements { ... } and ERROR recovery nodes —
+                # both used by Django-style JS that wraps code in a top-level block
+                yield from child.children
 
 
 def _iter_inside_transparent(node: Node, depth: int):
@@ -411,16 +458,23 @@ def _extract_js_symbol(node: Node, source: bytes, lang_mod, lang_name: str) -> O
             if child.type in ("function_declaration", "class_declaration"):
                 return _extract_js_symbol(child, source, lang_mod, lang_name)
 
-    if node.type == "lexical_declaration":
+    if node.type in ("lexical_declaration", "variable_declaration"):
+        keyword = "const" if node.type == "lexical_declaration" else "var"
         for decl in node.children:
             if decl.type == "variable_declarator":
                 name_node = decl.child_by_field_name("name")
                 value_node = decl.child_by_field_name("value")
-                if name_node and value_node and value_node.type == "arrow_function":
-                    name = source[name_node.start_byte:name_node.end_byte].decode()
+                if not name_node or not value_node:
+                    continue
+                name = source[name_node.start_byte:name_node.end_byte].decode()
+                if value_node.type == "arrow_function":
                     params_node = value_node.child_by_field_name("parameters") or value_node.child_by_field_name("parameter")
                     params = source[params_node.start_byte:params_node.end_byte].decode() if params_node else "()"
-                    return Symbol(name=name, kind="function", signature=f"const {name} = {params} =>")
+                    return Symbol(name=name, kind="function", signature=f"{keyword} {name} = {params} =>")
+                if value_node.type == "function_expression":
+                    params_node = value_node.child_by_field_name("parameters")
+                    params = source[params_node.start_byte:params_node.end_byte].decode() if params_node else "()"
+                    return Symbol(name=name, kind="function", signature=f"function {name}{params}")
 
     return None
 

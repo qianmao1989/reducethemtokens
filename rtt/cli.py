@@ -422,16 +422,23 @@ def install(
         else:
             console.print(f"  [dim]skipped[/dim]  {r.config_file}  [dim]({r.note})[/dim]")
 
+    # Install git pre-commit hook
+    from rtt.installer import install_git_hook
+    hook_action = install_git_hook(resolved)
+    if hook_action == "created":
+        console.print(f"  [green]created[/green]  .git/hooks/pre-commit  [dim](auto-update on commit)[/dim]")
+    elif hook_action == "updated":
+        console.print(f"  [green]updated[/green]  .git/hooks/pre-commit  [dim](auto-update on commit)[/dim]")
+
     installed = [r for r in results if r.action != "skipped"]
     console.print()
-    if installed:
+    if installed or hook_action in ("created", "updated"):
         console.print(
             f"[bold green]Installed to {len(installed)} config file(s).[/bold green] "
             f"Agents will read .rtt/context.txt at session start."
         )
-        console.print(
-            f"[dim]Re-run after code changes: rtt install {path if path != '.' else ''}[/dim]"
-        )
+        if hook_action != "skipped":
+            console.print(f"[dim].rtt/context.txt will auto-update on every git commit.[/dim]")
     else:
         console.print("[yellow]Nothing changed.[/yellow] Use --force to overwrite existing sections.")
 
@@ -439,6 +446,7 @@ def install(
 @app.command()
 def update(
     path: str = typer.Argument(".", help="Path to repo or directory"),
+    diff: bool = typer.Option(False, "--diff", help="Show what changed since last update"),
 ):
     """Regenerate .rtt/context.txt after code changes.
 
@@ -458,6 +466,18 @@ def update(
             "Run [bold]rtt install[/bold] first to set up agent configs."
         )
 
+    # Snapshot old symbols if diff requested
+    old_symbols: set[str] = set()
+    if diff and skel_file.exists():
+        for line in skel_file.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if stripped and not stripped.startswith("#") and not stripped.startswith("imports:"):
+                # Extract the symbol name (first word-like token before ( or space)
+                import re as _re
+                m = _re.match(r'(?:def |func |function |class |struct |trait |impl |const |var )?(\w+)', stripped)
+                if m:
+                    old_symbols.add(m.group(1))
+
     with console.status("[dim]Indexing...[/dim]", spinner="dots"):
         repo   = extract_repo(resolved, use_cache=False)
         text   = format_text(repo)
@@ -467,6 +487,29 @@ def update(
     skel_file.write_text(text, encoding="utf-8")
 
     console.print(f"[green]Updated:[/green] .rtt/context.txt  ({tokens:,} tokens, {len(repo.files)} files)")
+
+    if diff:
+        new_symbols: set[str] = set()
+        for line in text.splitlines():
+            stripped = line.strip()
+            if stripped and not stripped.startswith("#") and not stripped.startswith("imports:"):
+                import re as _re
+                m = _re.match(r'(?:def |func |function |class |struct |trait |impl |const |var )?(\w+)', stripped)
+                if m:
+                    new_symbols.add(m.group(1))
+
+        added   = new_symbols - old_symbols
+        removed = old_symbols - new_symbols
+
+        if not added and not removed:
+            console.print("[dim]No structural changes detected.[/dim]")
+        else:
+            if added:
+                console.print(f"  [green]+{len(added)} symbol(s) added:[/green]   {', '.join(sorted(added)[:10])}" +
+                              (f" ... and {len(added)-10} more" if len(added) > 10 else ""))
+            if removed:
+                console.print(f"  [red]-{len(removed)} symbol(s) removed:[/red] {', '.join(sorted(removed)[:10])}" +
+                              (f" ... and {len(removed)-10} more" if len(removed) > 10 else ""))
 
 
 @app.command()

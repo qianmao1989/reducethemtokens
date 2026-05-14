@@ -86,6 +86,7 @@ def run_bench(path: str, use_llm: bool, llm_sample: int) -> BenchReport
 | Reduction | **90.9%** |
 | Heuristic bench score | **100.0%** (13,665 / 13,670 questions) |
 | Audit coverage (Python) | **99.9%** (34,454 / 34,480 symbols) |
+| Audit coverage (JavaScript) | **97.9%** (46 / 47 symbols) |
 
 The heuristic bench auto-generates factual questions from the index — parameter names, return types, method lists, imports — and verifies each answer appears in the skeleton. A score of 100% means no structural information was lost in compression.
 
