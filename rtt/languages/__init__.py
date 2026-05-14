@@ -1,0 +1,25 @@
+from rtt.languages import (
+    python_lang,
+    javascript_lang,
+    typescript_lang,
+    go_lang,
+    rust_lang,
+    java_lang,
+    c_lang,
+    cpp_lang,
+    ruby_lang,
+    swift_lang,
+)
+
+LANG_MODULES = {
+    "python": python_lang,
+    "javascript": javascript_lang,
+    "typescript": typescript_lang,
+    "go": go_lang,
+    "rust": rust_lang,
+    "java": java_lang,
+    "c": c_lang,
+    "cpp": cpp_lang,
+    "ruby": ruby_lang,
+    "swift": swift_lang,
+}

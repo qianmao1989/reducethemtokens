@@ -1,0 +1,34 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "reducethemtokens"
+version = "0.1.0"
+description = "Compress any code repo into a compact skeleton to reduce LLM token usage"
+requires-python = ">=3.9"
+dependencies = [
+    "tree-sitter>=0.22.0",
+    "tree-sitter-python>=0.23.0",
+    "tree-sitter-javascript>=0.23.0",
+    "tree-sitter-typescript>=0.23.0",
+    "tree-sitter-go>=0.23.0",
+    "tree-sitter-rust>=0.23.0",
+    "tree-sitter-java>=0.23.0",
+    "tree-sitter-c>=0.23.0",
+    "tree-sitter-cpp>=0.23.0",
+    "tree-sitter-ruby>=0.23.0",
+    "tiktoken>=0.7.0",
+    "typer>=0.12.0",
+    "rich>=13.0.0",
+]
+
+[project.scripts]
+rtt = "rtt.cli:app"
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0.0", "pytest-cov"]
+llm = ["anthropic>=0.30.0"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["rtt"]

@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.rtt-cache/
+graphify-out/
+dist/
+build/
+*.egg-info/
+.env
+.DS_Store

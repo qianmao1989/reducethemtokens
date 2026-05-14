@@ -1,0 +1,632 @@
+import hashlib
+import os
+from pathlib import Path
+from typing import Optional
+
+from tree_sitter import Parser, Node
+
+from rtt import FileIndex, RepoIndex, Symbol, CompareReport
+from rtt.languages.registry import detect_language, get_ts_language
+from rtt.languages import LANG_MODULES
+from rtt.tokenizer import count_tokens
+from rtt.cache import Cache
+
+SKIP_DIRS = {
+    ".git", ".hg", ".svn", "node_modules", "__pycache__", ".pytest_cache",
+    "venv", ".venv", "env", ".env", "dist", "build", ".next", ".nuxt",
+    "target", ".rtt-cache", ".idea", ".vscode", "coverage", ".nyc_output",
+}
+
+
+def _get_docstring(node: Node, source: bytes) -> Optional[str]:
+    """Extract first string literal from a function body as docstring."""
+    for child in node.children:
+        if child.type == "block":
+            for stmt in child.children:
+                if stmt.type == "expression_statement":
+                    for expr in stmt.children:
+                        if expr.type in ("string", "string_literal"):
+                            raw = source[expr.start_byte:expr.end_byte].decode(errors="replace")
+                            cleaned = raw.strip("'\"` \n").split("\n")[0].strip()
+                            if cleaned:
+                                return cleaned[:80]
+    return None
+
+
+def _extract_file(filepath: str, cache: Optional[Cache] = None) -> Optional[FileIndex]:
+    path = Path(filepath)
+    if not path.is_file():
+        return None
+
+    lang_name = detect_language(filepath)
+    if not lang_name:
+        return None
+
+    ts_lang = get_ts_language(lang_name)
+    if not ts_lang:
+        return None
+
+    source = path.read_bytes()
+    file_hash = hashlib.sha256(source).hexdigest()
+
+    if cache:
+        cached = cache.get(filepath, file_hash)
+        if cached:
+            return cached
+
+    lang_mod = LANG_MODULES.get(lang_name)
+    if not lang_mod:
+        return None
+
+    parser = Parser(ts_lang)
+    tree = parser.parse(source)
+
+    symbols = _extract_symbols(tree.root_node, source, lang_name, lang_mod)
+    imports = _extract_imports(tree.root_node, source, lang_name, lang_mod)
+
+    file_index = FileIndex(
+        path=filepath,
+        language=lang_name,
+        imports=imports,
+        symbols=symbols,
+    )
+
+    if cache:
+        cache.set(filepath, file_hash, file_index)
+
+    return file_index
+
+
+def _extract_imports(root: Node, source: bytes, lang_name: str, _lang_mod) -> list[str]:
+    """Extract import names using direct AST traversal (no query API needed).
+
+    For bare module imports (import os, import 'fs'), stores just the module name.
+    For named imports (from pathlib import Path, import { X } from 'y'), stores
+    module.Symbol entries so the skeleton captures which specific symbols are used.
+    """
+    seen: set[str] = set()
+    result: list[str] = []
+
+    def add(name: str):
+        name = name.strip().strip("\"'` ")
+        if name and name not in seen:
+            seen.add(name)
+            result.append(name)
+
+    def add_module(name: str):
+        """Add a bare module name (strip path separators and clean up)."""
+        name = name.strip().strip("\"'` ")
+        # Take only the root package (e.g. "os.path" → "os", '"fs"' → "fs")
+        name = name.split(".")[0].split("/")[-1]
+        add(name)
+
+    def text(node: Node) -> str:
+        return source[node.start_byte:node.end_byte].decode(errors="replace")
+
+    def add_named_imports(mod_name: str, names_node: Node):
+        """For 'from mod import X, Y' — emit mod.X, mod.Y entries."""
+        for child in names_node.children:
+            if child.type in ("dotted_name", "identifier"):
+                sym = text(child).strip()
+                if sym and sym != "*":
+                    add(f"{mod_name}.{sym}")
+            elif child.type == "aliased_import":
+                n = child.child_by_field_name("name")
+                if n:
+                    add(f"{mod_name}.{text(n).strip()}")
+            elif child.type == "wildcard_import":
+                add(f"{mod_name}.*")
+
+    for node in root.children:
+        t = node.type
+
+        if lang_name == "python":
+            if t == "import_statement":
+                # import os  /  import os, sys  /  import os as o
+                for child in node.children:
+                    if child.type == "dotted_name":
+                        add_module(text(child))
+                    elif child.type == "aliased_import":
+                        dn = child.child_by_field_name("name")
+                        if dn:
+                            add_module(text(dn))
+            elif t == "import_from_statement":
+                # from pathlib import Path  /  from . import x
+                mod = node.child_by_field_name("module_name")
+                mod_name = text(mod).strip() if mod else ""
+                if not mod_name or mod_name.startswith("."):
+                    # relative import — just store the module name if any
+                    if mod_name.lstrip("."):
+                        add_module(mod_name.lstrip("."))
+                else:
+                    # Collect named imports: from X import Y, Z
+                    names_added = False
+                    for child in node.children:
+                        if child.type == "import_from_as_clause":
+                            n = child.child_by_field_name("name")
+                            if n:
+                                add(f"{mod_name}.{text(n).strip()}")
+                                names_added = True
+                        elif child.type in ("dotted_name", "identifier") and child != mod:
+                            sym = text(child).strip()
+                            if sym and sym not in ("import",):
+                                add(f"{mod_name}.{sym}")
+                                names_added = True
+                        elif child.type == "wildcard_import":
+                            add(f"{mod_name}.*")
+                            names_added = True
+                    if not names_added and mod_name:
+                        add_module(mod_name)
+
+        elif lang_name in ("javascript", "typescript"):
+            if t == "import_statement":
+                src = node.child_by_field_name("source")
+                if not src:
+                    continue
+                raw_mod = text(src).strip().strip("\"'`")
+                mod_name = raw_mod.split("/")[-1]
+                # Look for named imports: import { X, Y } from '...'
+                named_added = False
+                for child in node.children:
+                    if child.type == "import_clause":
+                        for sub in child.children:
+                            if sub.type == "named_imports":
+                                for spec in sub.children:
+                                    if spec.type == "import_specifier":
+                                        n = spec.child_by_field_name("name")
+                                        if n:
+                                            add(f"{mod_name}.{text(n).strip()}")
+                                            named_added = True
+                            elif sub.type == "identifier":
+                                # default import: import X from 'y'
+                                add(mod_name)
+                                named_added = True
+                if not named_added:
+                    add(mod_name)
+
+        elif lang_name == "go":
+            # import "fmt"  or  import_spec inside import_declaration
+            if t == "import_declaration":
+                for spec in node.children:
+                    if spec.type == "import_spec":
+                        p = spec.child_by_field_name("path")
+                        if p:
+                            add_module(text(p))
+            elif t == "import_spec":
+                p = node.child_by_field_name("path")
+                if p:
+                    add_module(text(p))
+
+        elif lang_name == "rust":
+            if t == "use_declaration":
+                arg = node.child_by_field_name("argument")
+                if arg:
+                    full = text(arg).strip()
+                    # use std::collections::HashMap → std::collections::HashMap
+                    # use std::collections::{HashMap, BTreeMap} → keep as-is
+                    add(full)
+
+        elif lang_name == "java":
+            if t == "import_declaration":
+                for child in node.children:
+                    if child.type == "scoped_identifier":
+                        # java.util.HashMap → store full name
+                        add(text(child).strip())
+                        break
+
+        elif lang_name in ("c", "cpp"):
+            if t == "preproc_include":
+                for child in node.children:
+                    if child.type in ("string_literal", "system_lib_string"):
+                        add_module(text(child))
+
+        elif lang_name == "ruby":
+            if t == "call":
+                method = node.child_by_field_name("method")
+                if method and text(method) in ("require", "require_relative"):
+                    args = node.child_by_field_name("arguments")
+                    if args:
+                        for child in args.children:
+                            if child.type == "string":
+                                add_module(text(child))
+
+        if len(result) >= 30:
+            break
+
+    return result
+
+
+# Python nodes that are transparent containers — look inside for top-level definitions.
+# Handles patterns like: try: ... def f(): ... except: ... def f(): ...
+_PY_TRANSPARENT = frozenset({
+    "try_statement", "except_clause", "finally_clause",
+    "with_statement", "if_statement", "else_clause", "elif_clause",
+})
+
+
+def _iter_toplevel_nodes(root: Node, lang_name: str):
+    """Yield candidate top-level definition nodes, including those inside try/except."""
+    for child in root.children:
+        yield child
+        if lang_name == "python" and child.type in _PY_TRANSPARENT:
+            yield from _iter_inside_transparent(child, depth=0)
+
+
+def _iter_inside_transparent(node: Node, depth: int):
+    """Recursively yield definition nodes from inside transparent containers."""
+    if depth > 4:
+        return
+    for child in node.children:
+        if child.type == "block":
+            for grandchild in child.children:
+                yield grandchild
+                if grandchild.type in _PY_TRANSPARENT:
+                    yield from _iter_inside_transparent(grandchild, depth + 1)
+        elif child.type in _PY_TRANSPARENT:
+            yield from _iter_inside_transparent(child, depth + 1)
+
+
+def _extract_symbols(root: Node, source: bytes, lang_name: str, lang_mod) -> list[Symbol]:
+    """Walk the AST and extract top-level symbols."""
+    symbols = []
+    # Deduplicate by (name, kind) so that e.g. `struct Config` and `impl Config`
+    # in Rust are both included, while try/except duplicate functions collapse to one.
+    seen: set[tuple[str, str]] = set()
+
+    for node in _iter_toplevel_nodes(root, lang_name):
+        sym = _node_to_symbol(node, source, lang_name, lang_mod, depth=0)
+        if sym and (sym.name, sym.kind) not in seen:
+            symbols.append(sym)
+            seen.add((sym.name, sym.kind))
+
+    return symbols
+
+
+def _node_to_symbol(node: Node, source: bytes, lang_name: str, lang_mod, depth: int) -> Optional[Symbol]:
+    if depth > 2:
+        return None
+
+    sym = None
+
+    try:
+        if lang_name == "python":
+            sym = _extract_python_symbol(node, source, lang_mod)
+        elif lang_name in ("javascript", "typescript"):
+            sym = _extract_js_symbol(node, source, lang_mod, lang_name)
+        elif lang_name == "go":
+            sym = _extract_go_symbol(node, source, lang_mod)
+        elif lang_name == "rust":
+            sym = _extract_rust_symbol(node, source, lang_mod)
+        elif lang_name == "java":
+            sym = _extract_java_symbol(node, source, lang_mod)
+        elif lang_name in ("c", "cpp"):
+            sym = _extract_c_symbol(node, source, lang_mod)
+        elif lang_name == "ruby":
+            sym = _extract_ruby_symbol(node, source, lang_mod)
+    except Exception:
+        return None
+
+    if sym and sym.kind == "class" and depth == 0:
+        # Unwrap wrapper nodes to reach the actual class definition node whose
+        # "block" / "class_body" child holds the class body.
+        # Handles: @dataclass class Foo  →  decorated_definition → class_definition
+        #          export class Foo      →  export_statement     → class_declaration
+        class_node = node
+        _WRAPPER_TYPES = ("decorated_definition", "export_statement")
+        _CLASS_TYPES   = ("class_definition", "class_declaration")
+        if node.type in _WRAPPER_TYPES:
+            for child in node.children:
+                if child.type in _CLASS_TYPES:
+                    class_node = child
+                    break
+
+        body = _find_child_by_type(class_node, ["block", "class_body", "declaration_list", "body"])
+        if body:
+            for child in body.children:
+                try:
+                    child_sym = _node_to_symbol(child, source, lang_name, lang_mod, depth + 1)
+                    if child_sym:
+                        sym.children.append(child_sym)
+                except Exception:
+                    pass
+
+    return sym
+
+
+def _find_child_by_type(node: Node, types: list[str]) -> Optional[Node]:
+    for child in node.children:
+        if child.type in types:
+            return child
+    return None
+
+
+def _find_child(node: Node, field: str) -> Optional[Node]:
+    return node.child_by_field_name(field)
+
+
+def _extract_python_symbol(node: Node, source: bytes, lang_mod) -> Optional[Symbol]:
+    if node.type == "function_definition":
+        name_node = node.child_by_field_name("name")
+        params_node = node.child_by_field_name("parameters")
+        return_node = node.child_by_field_name("return_type")
+        if not name_node or not params_node:
+            return None
+        sig = lang_mod.extract_fn_signature(source, name_node, params_node, return_node)
+        doc = _get_docstring(node, source)
+        return Symbol(
+            name=source[name_node.start_byte:name_node.end_byte].decode(),
+            kind="function",
+            signature=sig,
+            docstring=doc,
+        )
+
+    if node.type == "class_definition":
+        name_node = node.child_by_field_name("name")
+        if not name_node:
+            return None
+        name = source[name_node.start_byte:name_node.end_byte].decode()
+        args = node.child_by_field_name("superclasses")
+        bases = ""
+        if args:
+            bases = source[args.start_byte:args.end_byte].decode()
+        sig = f"class {name}{bases}"
+        return Symbol(name=name, kind="class", signature=sig)
+
+    if node.type == "decorated_definition":
+        for child in node.children:
+            if child.type in ("function_definition", "class_definition"):
+                return _extract_python_symbol(child, source, lang_mod)
+
+    return None
+
+
+def _extract_js_symbol(node: Node, source: bytes, lang_mod, lang_name: str) -> Optional[Symbol]:
+    if node.type == "function_declaration":
+        name_node = node.child_by_field_name("name")
+        params_node = node.child_by_field_name("parameters")
+        if not name_node:
+            return None
+        name = source[name_node.start_byte:name_node.end_byte].decode()
+        params = source[params_node.start_byte:params_node.end_byte].decode() if params_node else "()"
+        return Symbol(name=name, kind="function", signature=f"function {name}{params}")
+
+    if node.type == "class_declaration":
+        name_node = node.child_by_field_name("name")
+        if not name_node:
+            return None
+        name = source[name_node.start_byte:name_node.end_byte].decode()
+        return Symbol(name=name, kind="class", signature=f"class {name}")
+
+    if node.type == "method_definition":
+        name_node = node.child_by_field_name("name")
+        params_node = node.child_by_field_name("parameters")
+        if not name_node:
+            return None
+        name = source[name_node.start_byte:name_node.end_byte].decode()
+        params = source[params_node.start_byte:params_node.end_byte].decode() if params_node else "()"
+        return Symbol(name=name, kind="method", signature=f"{name}{params}")
+
+    if node.type == "export_statement":
+        for child in node.children:
+            if child.type in ("function_declaration", "class_declaration"):
+                return _extract_js_symbol(child, source, lang_mod, lang_name)
+
+    if node.type == "lexical_declaration":
+        for decl in node.children:
+            if decl.type == "variable_declarator":
+                name_node = decl.child_by_field_name("name")
+                value_node = decl.child_by_field_name("value")
+                if name_node and value_node and value_node.type == "arrow_function":
+                    name = source[name_node.start_byte:name_node.end_byte].decode()
+                    params_node = value_node.child_by_field_name("parameters") or value_node.child_by_field_name("parameter")
+                    params = source[params_node.start_byte:params_node.end_byte].decode() if params_node else "()"
+                    return Symbol(name=name, kind="function", signature=f"const {name} = {params} =>")
+
+    return None
+
+
+def _extract_go_symbol(node: Node, source: bytes, lang_mod) -> Optional[Symbol]:
+    if node.type == "function_declaration":
+        name_node = node.child_by_field_name("name")
+        params_node = node.child_by_field_name("parameters")
+        result_node = node.child_by_field_name("result")
+        if not name_node:
+            return None
+        name = source[name_node.start_byte:name_node.end_byte].decode()
+        params = source[params_node.start_byte:params_node.end_byte].decode() if params_node else "()"
+        ret = " " + source[result_node.start_byte:result_node.end_byte].decode() if result_node else ""
+        return Symbol(name=name, kind="function", signature=f"func {name}{params}{ret}")
+
+    if node.type == "method_declaration":
+        name_node = node.child_by_field_name("name")
+        params_node = node.child_by_field_name("parameters")
+        recv = node.child_by_field_name("receiver")
+        if not name_node:
+            return None
+        name = source[name_node.start_byte:name_node.end_byte].decode()
+        params = source[params_node.start_byte:params_node.end_byte].decode() if params_node else "()"
+        receiver = source[recv.start_byte:recv.end_byte].decode() if recv else ""
+        return Symbol(name=name, kind="method", signature=f"func {receiver} {name}{params}")
+
+    if node.type == "type_declaration":
+        for spec in node.children:
+            if spec.type == "type_spec":
+                name_node = spec.child_by_field_name("name")
+                type_node = spec.child_by_field_name("type")
+                if name_node:
+                    name = source[name_node.start_byte:name_node.end_byte].decode()
+                    type_str = source[type_node.start_byte:type_node.end_byte].decode() if type_node else ""
+                    kind = "struct" if "struct" in type_str else "type"
+                    return Symbol(name=name, kind=kind, signature=f"type {name} {type_str[:40]}")
+
+    return None
+
+
+def _extract_rust_symbol(node: Node, source: bytes, lang_mod) -> Optional[Symbol]:
+    if node.type == "function_item":
+        name_node = node.child_by_field_name("name")
+        params_node = node.child_by_field_name("parameters")
+        return_node = node.child_by_field_name("return_type")
+        if not name_node:
+            return None
+        name = source[name_node.start_byte:name_node.end_byte].decode()
+        params = source[params_node.start_byte:params_node.end_byte].decode() if params_node else "()"
+        ret = " -> " + source[return_node.start_byte:return_node.end_byte].decode() if return_node else ""
+        return Symbol(name=name, kind="function", signature=f"fn {name}{params}{ret}")
+
+    if node.type in ("struct_item", "enum_item", "trait_item"):
+        name_node = node.child_by_field_name("name")
+        if not name_node:
+            return None
+        name = source[name_node.start_byte:name_node.end_byte].decode()
+        kind = node.type.replace("_item", "")
+        return Symbol(name=name, kind=kind, signature=f"{kind} {name}")
+
+    if node.type == "impl_item":
+        type_node = node.child_by_field_name("type")
+        if not type_node:
+            return None
+        type_name = source[type_node.start_byte:type_node.end_byte].decode()
+        sym = Symbol(name=type_name, kind="impl", signature=f"impl {type_name}")
+        body = node.child_by_field_name("body")
+        if body:
+            for child in body.children:
+                try:
+                    child_sym = _extract_rust_symbol(child, source, lang_mod)
+                    if child_sym:
+                        sym.children.append(child_sym)
+                except Exception:
+                    pass
+        return sym
+
+    return None
+
+
+def _extract_java_symbol(node: Node, source: bytes, lang_mod) -> Optional[Symbol]:
+    if node.type == "class_declaration":
+        name_node = node.child_by_field_name("name")
+        if not name_node:
+            return None
+        name = source[name_node.start_byte:name_node.end_byte].decode()
+        return Symbol(name=name, kind="class", signature=f"class {name}")
+
+    if node.type == "method_declaration":
+        name_node = node.child_by_field_name("name")
+        params_node = node.child_by_field_name("parameters")
+        type_node = node.child_by_field_name("type")
+        if not name_node:
+            return None
+        name = source[name_node.start_byte:name_node.end_byte].decode()
+        params = source[params_node.start_byte:params_node.end_byte].decode() if params_node else "()"
+        ret = source[type_node.start_byte:type_node.end_byte].decode() if type_node else "void"
+        return Symbol(name=name, kind="method", signature=f"{ret} {name}{params}")
+
+    if node.type == "interface_declaration":
+        name_node = node.child_by_field_name("name")
+        if not name_node:
+            return None
+        name = source[name_node.start_byte:name_node.end_byte].decode()
+        return Symbol(name=name, kind="interface", signature=f"interface {name}")
+
+    return None
+
+
+def _extract_c_symbol(node: Node, source: bytes, lang_mod) -> Optional[Symbol]:
+    if node.type == "function_definition":
+        declarator = node.child_by_field_name("declarator")
+        if not declarator:
+            return None
+        if declarator.type == "function_declarator":
+            name_node = declarator.child_by_field_name("declarator")
+            params_node = declarator.child_by_field_name("parameters")
+            if not name_node:
+                return None
+            name = source[name_node.start_byte:name_node.end_byte].decode()
+            params = source[params_node.start_byte:params_node.end_byte].decode() if params_node else "()"
+            return Symbol(name=name, kind="function", signature=f"{name}{params}")
+
+    if node.type in ("struct_specifier", "class_specifier"):
+        name_node = node.child_by_field_name("name")
+        if name_node:
+            name = source[name_node.start_byte:name_node.end_byte].decode()
+            kind = "struct" if node.type == "struct_specifier" else "class"
+            return Symbol(name=name, kind=kind, signature=f"{kind} {name}")
+
+    return None
+
+
+def _extract_ruby_symbol(node: Node, source: bytes, lang_mod) -> Optional[Symbol]:
+    if node.type == "method":
+        name_node = node.child_by_field_name("name")
+        params_node = node.child_by_field_name("parameters")
+        if not name_node:
+            return None
+        name = source[name_node.start_byte:name_node.end_byte].decode()
+        params = source[params_node.start_byte:params_node.end_byte].decode() if params_node else ""
+        return Symbol(name=name, kind="method", signature=f"def {name}{params}")
+
+    if node.type == "class":
+        name_node = node.child_by_field_name("name")
+        if not name_node:
+            return None
+        name = source[name_node.start_byte:name_node.end_byte].decode()
+        return Symbol(name=name, kind="class", signature=f"class {name}")
+
+    if node.type == "module":
+        name_node = node.child_by_field_name("name")
+        if not name_node:
+            return None
+        name = source[name_node.start_byte:name_node.end_byte].decode()
+        return Symbol(name=name, kind="module", signature=f"module {name}")
+
+    return None
+
+
+def extract_repo(path: str, use_cache: bool = True) -> RepoIndex:
+    root = Path(path).resolve()
+    cache = Cache(str(root)) if use_cache else None
+    files = []
+
+    for dirpath, dirnames, filenames in os.walk(str(root)):
+        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+        for filename in filenames:
+            filepath = os.path.join(dirpath, filename)
+            file_index = _extract_file(filepath, cache)
+            if file_index:
+                # Make path relative
+                file_index.path = os.path.relpath(filepath, str(root))
+                files.append(file_index)
+
+    if cache:
+        cache.save()
+
+    return RepoIndex(files=sorted(files, key=lambda f: f.path))
+
+
+def compare_repo(path: str) -> CompareReport:
+    from rtt.tokenizer import count_raw_repo_tokens
+    from rtt.formatter import format_text, format_file_text
+
+    root = Path(path).resolve()
+    repo_index = extract_repo(str(root))
+
+    raw_total, per_file_raw = count_raw_repo_tokens(str(root))
+    compressed_total = count_tokens(format_text(repo_index))
+
+    per_file = []
+    for file_index in repo_index.files:
+        compressed = count_tokens(format_file_text(file_index))
+        raw = per_file_raw.get(file_index.path, 0)
+        per_file.append({
+            "path": file_index.path,
+            "raw": raw,
+            "compressed": compressed,
+        })
+
+    return CompareReport(
+        path=str(root),
+        raw_tokens=raw_total,
+        compressed_tokens=compressed_total,
+        file_count=len(repo_index.files),
+        per_file=sorted(per_file, key=lambda x: x["raw"], reverse=True),
+    )
