@@ -121,6 +121,12 @@ The heuristic bench auto-generates factual questions from the index — paramete
 return types, method lists, imports — and verifies every answer appears in the skeleton.
 100% means no structural information was lost in compression.
 
+A separate controlled accuracy test asks Claude structural questions about code, once
+with full source and once with the skeleton, then uses Claude-as-judge to verify
+correctness. The skeleton scores **90%** on this test — matching the full source on
+every question except those involving imports defined inside function bodies (a
+structural limitation: rtt only captures top-level imports by design).
+
 ---
 
 ## Commands
