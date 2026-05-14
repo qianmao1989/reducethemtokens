@@ -73,8 +73,9 @@ def _instruction_block(
         f"files for implementation details, edit files, run tools. "
         f"The index is a navigation aid — it does not replace reading source files "
         f"when you need to understand or modify actual code.\n\n"
-        f"If `{context_path}` is missing or appears outdated, ask the user to run "
-        f"`rtt update` in the repository root."
+        f"The first line of `{context_path}` shows when it was generated and how many "
+        f"files it covers. If it looks outdated relative to recent changes, or if the "
+        f"file is missing entirely, tell the user to run `rtt update` before continuing."
     )
 
     if fmt == "mdc":

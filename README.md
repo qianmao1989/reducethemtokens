@@ -233,6 +233,66 @@ rtt view . --output overview.md
 
 ---
 
+## Keeping the skeleton current
+
+`rtt install` sets up a git pre-commit hook that runs `rtt update` automatically
+on every commit. For most solo workflows that is enough.
+
+**For teams**, the hook only runs on machines where rtt is installed. A new
+contributor who clones the repo without installing rtt will not regenerate the
+skeleton. Two approaches:
+
+Add a CI step that regenerates and commits the skeleton on every merge to main:
+
+```yaml
+# .github/workflows/rtt.yml
+name: Update rtt index
+on:
+  push:
+    branches: [main]
+jobs:
+  rtt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install reducethemtokens
+      - run: rtt update .
+      - uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: update rtt index"
+          file_pattern: ".rtt/context.txt"
+```
+
+Or document it in your contributing guide:
+
+```
+# after pulling changes
+rtt update .
+git add .rtt/context.txt
+```
+
+The first line of `.rtt/context.txt` includes the generation timestamp and file
+count, so agents can detect a stale index without reading the whole file.
+
+**Large repos and context window limits**
+
+If the skeleton is too large for your model's context window, use `--max-tokens`
+to trim it to fit. rtt will keep non-test files with the most symbols and drop
+the rest:
+
+```
+rtt install . --max-tokens 100000    # fits in most 128k-window models
+rtt install . --max-tokens 50000     # conservative
+```
+
+Or limit to specific directories:
+
+```
+rtt install . --include 'src/**' --include 'lib/**' --exclude 'tests/**'
+```
+
+---
+
 ## Python API
 
 ```python

@@ -636,7 +636,67 @@ def _extract_ruby_symbol(node: Node, source: bytes, lang_mod) -> Optional[Symbol
     return None
 
 
-def extract_repo(path: str, use_cache: bool = True) -> RepoIndex:
+def _matches_any(rel_path: str, patterns: list[str]) -> bool:
+    """Return True if rel_path matches any of the given glob patterns."""
+    from pathlib import PurePosixPath
+    p = PurePosixPath(rel_path.replace(os.sep, "/"))
+    for pat in patterns:
+        if p.match(pat):
+            return True
+    return False
+
+
+def _trim_to_budget(
+    files: list,
+    max_tokens: int,
+) -> tuple[list, int]:
+    """Select files by priority until max_tokens budget is reached.
+
+    Priority: non-test files first, then by symbol count descending.
+    Returns (selected_files_sorted, n_dropped).
+    """
+    from rtt.formatter import format_file_text
+
+    _TEST_MARKERS = ("test", "spec", "fixture", "mock", "__pycache__")
+
+    def _priority(fi) -> int:
+        path = fi.path.lower().replace(os.sep, "/")
+        is_test = any(m in path for m in _TEST_MARKERS)
+        n_syms = sum(1 + len(s.children) for s in fi.symbols)
+        return (0 if is_test else 10_000) + n_syms
+
+    ordered = sorted(files, key=_priority, reverse=True)
+    selected = []
+    used = 0
+    for fi in ordered:
+        cost = count_tokens(format_file_text(fi))
+        if used + cost <= max_tokens:
+            selected.append(fi)
+            used += cost
+
+    dropped = len(files) - len(selected)
+    return sorted(selected, key=lambda f: f.path), dropped
+
+
+def extract_repo(
+    path: str,
+    use_cache: bool = True,
+    include: Optional[list[str]] = None,
+    exclude: Optional[list[str]] = None,
+    max_tokens: Optional[int] = None,
+) -> RepoIndex:
+    """Extract a structural index of the repository.
+
+    Args:
+        path: Root directory to index.
+        use_cache: Use per-file content-hash cache.
+        include: Glob patterns — only files matching at least one are included.
+                 e.g. ["src/**", "lib/**", "*.py"]
+        exclude: Glob patterns — files matching any are excluded.
+                 e.g. ["tests/**", "vendor/**"]
+        max_tokens: If set, trim the result to fit within this token budget,
+                    prioritising non-test files with the most symbols.
+    """
     root = Path(path).resolve()
     cache = Cache(str(root)) if use_cache else None
     files = []
@@ -647,14 +707,28 @@ def extract_repo(path: str, use_cache: bool = True) -> RepoIndex:
             filepath = os.path.join(dirpath, filename)
             file_index = _extract_file(filepath, cache)
             if file_index:
-                # Make path relative
-                file_index.path = os.path.relpath(filepath, str(root))
+                rel = os.path.relpath(filepath, str(root))
+                file_index.path = rel
+
+                if include and not _matches_any(rel, include):
+                    continue
+                if exclude and _matches_any(rel, exclude):
+                    continue
+
                 files.append(file_index)
 
     if cache:
         cache.save()
 
-    return RepoIndex(files=sorted(files, key=lambda f: f.path))
+    files = sorted(files, key=lambda f: f.path)
+
+    dropped = 0
+    if max_tokens is not None:
+        files, dropped = _trim_to_budget(files, max_tokens)
+
+    repo = RepoIndex(files=files)
+    repo._dropped = dropped  # carry forward for CLI reporting
+    return repo
 
 
 def compare_repo(path: str) -> CompareReport:

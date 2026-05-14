@@ -29,6 +29,12 @@ def index(
     path: str = typer.Argument(".", help="Path to repo or directory"),
     no_cache: bool = typer.Option(False, "--no-cache", help="Disable file cache"),
     output: Optional[str] = typer.Option(None, "--output", "-o", help="Write output to file"),
+    include: Optional[list[str]] = typer.Option(None, "--include", "-i",
+        help="Glob pattern to include (repeatable). e.g. --include 'src/**' --include '*.py'"),
+    exclude: Optional[list[str]] = typer.Option(None, "--exclude", "-e",
+        help="Glob pattern to exclude (repeatable). e.g. --exclude 'tests/**'"),
+    max_tokens: Optional[int] = typer.Option(None, "--max-tokens", "-m",
+        help="Trim output to fit within this token budget, dropping low-priority files first."),
 ):
     """Generate a compact skeleton index of the repo and print to stdout."""
     from rtt.extractor import extract_repo
@@ -36,15 +42,23 @@ def index(
     resolved = _resolve_path(path)
 
     with console.status("[dim]Indexing...[/dim]", spinner="dots"):
-        repo = extract_repo(resolved, use_cache=not no_cache)
+        repo = extract_repo(resolved, use_cache=not no_cache,
+                            include=include, exclude=exclude, max_tokens=max_tokens)
 
     text = repo.text
+    tokens = repo.token_count
+    dropped = getattr(repo, "_dropped", 0)
 
     if output:
         Path(output).write_text(text)
-        console.print(f"[green]Written to {output}[/green] ({repo.token_count:,} tokens)")
+        msg = f"[green]Written to {output}[/green] ({tokens:,} tokens, {len(repo.files)} files"
+        if dropped:
+            msg += f", [yellow]{dropped} files excluded by --max-tokens[/yellow]"
+        console.print(msg + ")")
     else:
         print(text)
+        if dropped:
+            err_console.print(f"[yellow]{dropped} files excluded to stay within --max-tokens budget[/yellow]")
 
 
 @app.command()
@@ -368,6 +382,12 @@ def install(
     platform: Optional[str] = typer.Option(None, "--platform", "-p",
         help="Target platform: claude, cursor, windsurf, codex, copilot, kiro, gemini, aider, zed. Default: all."),
     force: bool = typer.Option(False, "--force", help="Overwrite existing rtt sections"),
+    include: Optional[list[str]] = typer.Option(None, "--include", "-i",
+        help="Glob pattern to include (repeatable)."),
+    exclude: Optional[list[str]] = typer.Option(None, "--exclude", "-e",
+        help="Glob pattern to exclude (repeatable)."),
+    max_tokens: Optional[int] = typer.Option(None, "--max-tokens", "-m",
+        help="Trim skeleton to fit within this token budget."),
 ):
     """Index the repo and inject context instructions into agent config files.
 
@@ -393,21 +413,25 @@ def install(
         raise typer.Exit(1)
 
     with console.status("[dim]Indexing repo...[/dim]", spinner="dots"):
-        repo    = extract_repo(resolved, use_cache=False)
-        text    = format_text(repo)
+        repo       = extract_repo(resolved, use_cache=False,
+                                  include=include, exclude=exclude, max_tokens=max_tokens)
+        text       = format_text(repo)
         compressed = count_tokens(text)
 
     with console.status("[dim]Counting raw tokens...[/dim]", spinner="dots"):
-        report  = compare_repo(resolved)
-        raw     = report.raw_tokens
+        report    = compare_repo(resolved)
+        raw       = report.raw_tokens
         reduction = report.reduction_pct
 
-    # Write skeleton file
+    # Write skeleton file with staleness header
+    from rtt.formatter import format_text_with_header
     skel_dir  = Path(resolved) / ".rtt"
     skel_file = skel_dir / "context.txt"
     skel_dir.mkdir(exist_ok=True)
-    skel_file.write_text(text, encoding="utf-8")
-    console.print(f"[green]Skeleton written:[/green] .rtt/context.txt  ({compressed:,} tokens)")
+    skel_file.write_text(format_text_with_header(repo, compressed), encoding="utf-8")
+    dropped = getattr(repo, "_dropped", 0)
+    drop_note = f"  [yellow]({dropped} files excluded by --max-tokens)[/yellow]" if dropped else ""
+    console.print(f"[green]Skeleton written:[/green] .rtt/context.txt  ({compressed:,} tokens){drop_note}")
 
     # Inject into agent configs
     platform_names = [platform] if platform else None
@@ -447,6 +471,12 @@ def install(
 def update(
     path: str = typer.Argument(".", help="Path to repo or directory"),
     diff: bool = typer.Option(False, "--diff", help="Show what changed since last update"),
+    include: Optional[list[str]] = typer.Option(None, "--include", "-i",
+        help="Glob pattern to include (repeatable)."),
+    exclude: Optional[list[str]] = typer.Option(None, "--exclude", "-e",
+        help="Glob pattern to exclude (repeatable)."),
+    max_tokens: Optional[int] = typer.Option(None, "--max-tokens", "-m",
+        help="Trim skeleton to fit within this token budget."),
 ):
     """Regenerate .rtt/context.txt after code changes.
 
@@ -454,7 +484,7 @@ def update(
     are not touched — run this whenever the codebase changes.
     """
     from rtt.extractor import extract_repo
-    from rtt.formatter import format_text
+    from rtt.formatter import format_text, format_text_with_header
     from rtt.tokenizer import count_tokens
 
     resolved = _resolve_path(path)
@@ -479,14 +509,17 @@ def update(
                     old_symbols.add(m.group(1))
 
     with console.status("[dim]Indexing...[/dim]", spinner="dots"):
-        repo   = extract_repo(resolved, use_cache=False)
+        repo   = extract_repo(resolved, use_cache=False,
+                              include=include, exclude=exclude, max_tokens=max_tokens)
         text   = format_text(repo)
         tokens = count_tokens(text)
 
     skel_file.parent.mkdir(exist_ok=True)
-    skel_file.write_text(text, encoding="utf-8")
+    skel_file.write_text(format_text_with_header(repo, tokens), encoding="utf-8")
 
-    console.print(f"[green]Updated:[/green] .rtt/context.txt  ({tokens:,} tokens, {len(repo.files)} files)")
+    dropped = getattr(repo, "_dropped", 0)
+    drop_note = f"  [yellow]({dropped} files excluded)[/yellow]" if dropped else ""
+    console.print(f"[green]Updated:[/green] .rtt/context.txt  ({tokens:,} tokens, {len(repo.files)} files){drop_note}")
 
     if diff:
         new_symbols: set[str] = set()

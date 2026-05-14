@@ -1,3 +1,5 @@
+from __future__ import annotations
+import datetime
 from rtt import RepoIndex, FileIndex, Symbol
 
 
@@ -9,6 +11,24 @@ def format_text(repo: RepoIndex) -> str:
         if text.strip():
             parts.append(text)
     return "\n".join(parts)
+
+
+def format_text_with_header(repo: RepoIndex, token_count: int) -> str:
+    """Skeleton with a staleness header as the first line.
+
+    The header gives agents a signal for how fresh the index is:
+        # rtt index | generated 2025-05-14 13:00 | 3020 files | 585421 tokens
+    """
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    n_files = len(repo.files)
+    dropped = getattr(repo, "_dropped", 0)
+    drop_note = f" | {dropped} files excluded by budget" if dropped else ""
+    header = (
+        f"# rtt index | generated {now} | {n_files} files | "
+        f"{token_count} tokens{drop_note}\n"
+        f"# If this looks outdated, ask the user to run: rtt update\n"
+    )
+    return header + format_text(repo)
 
 
 def format_file_text(file_index: FileIndex) -> str:
