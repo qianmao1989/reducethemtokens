@@ -43,8 +43,8 @@ coding agent working in this repo reads the skeleton at session start instead of
 scanning raw source files.
 
 ```
-# Re-run after code changes to keep the skeleton current
-rtt install . --force
+# After code changes — regenerate the skeleton without touching agent configs
+rtt update .
 
 # If you only want the skeleton file without touching agent configs
 rtt index . --output context.txt
@@ -119,7 +119,19 @@ Supported agents and the files they write to:
 Commit `.rtt/context.txt` and the updated config files to your repository. Every
 collaborator and every new session then gets the context automatically.
 
-Re-run `rtt install` after significant code changes to keep the skeleton current.
+After code changes, run `rtt update` to regenerate the skeleton without modifying
+the agent config files again.
+
+### `rtt update`
+
+Regenerate `.rtt/context.txt` after code changes. Does not touch agent config files.
+
+```
+rtt update .
+```
+
+Run this whenever the codebase changes. Commit the updated `.rtt/context.txt` so
+all collaborators and CI environments stay current.
 
 ### `rtt uninstall`
 

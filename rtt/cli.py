@@ -437,6 +437,39 @@ def install(
 
 
 @app.command()
+def update(
+    path: str = typer.Argument(".", help="Path to repo or directory"),
+):
+    """Regenerate .rtt/context.txt after code changes.
+
+    Re-indexes the repo and overwrites the skeleton file. Agent config files
+    are not touched — run this whenever the codebase changes.
+    """
+    from rtt.extractor import extract_repo
+    from rtt.formatter import format_text
+    from rtt.tokenizer import count_tokens
+
+    resolved = _resolve_path(path)
+    skel_file = Path(resolved) / ".rtt" / "context.txt"
+
+    if not skel_file.exists():
+        err_console.print(
+            "[yellow]Warning:[/yellow] .rtt/context.txt not found. "
+            "Run [bold]rtt install[/bold] first to set up agent configs."
+        )
+
+    with console.status("[dim]Indexing...[/dim]", spinner="dots"):
+        repo   = extract_repo(resolved, use_cache=False)
+        text   = format_text(repo)
+        tokens = count_tokens(text)
+
+    skel_file.parent.mkdir(exist_ok=True)
+    skel_file.write_text(text, encoding="utf-8")
+
+    console.print(f"[green]Updated:[/green] .rtt/context.txt  ({tokens:,} tokens, {len(repo.files)} files)")
+
+
+@app.command()
 def uninstall(
     path: str = typer.Argument(".", help="Path to repo or directory"),
     platform: Optional[str] = typer.Option(None, "--platform", "-p",
