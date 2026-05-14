@@ -60,9 +60,16 @@ class DiffReport:
         return self.after_tokens - self.before_tokens
 
 
-def index(path: str) -> RepoIndex:
+def index(
+    path: str,
+    include: Optional[list[str]] = None,
+    exclude: Optional[list[str]] = None,
+    max_tokens: Optional[int] = None,
+    no_tests: bool = False,
+) -> RepoIndex:
     from rtt.extractor import extract_repo
-    return extract_repo(path)
+    return extract_repo(path, include=include, exclude=exclude,
+                        max_tokens=max_tokens, no_tests=no_tests)
 
 
 def compare(path: str) -> CompareReport:

@@ -135,6 +135,10 @@ that regenerates the skeleton automatically on every commit.
 rtt install .
 rtt install . --platform claude    # single agent only
 rtt install . --force              # overwrite existing rtt sections
+rtt install . --no-tests           # exclude test/spec/fixture files
+rtt install . --max-tokens 100000  # trim to fit a context window budget
+rtt install . --include 'src/**'   # only index specific directories
+rtt install . --exclude 'vendor/**'
 ```
 
 Supported agents:
@@ -162,7 +166,8 @@ The git hook installed by `rtt install` runs this automatically on every commit.
 
 ```
 rtt update .
-rtt update . --diff    # show what symbols changed
+rtt update . --diff        # show what symbols changed
+rtt update . --no-tests    # same flags as install are accepted
 ```
 
 ### `rtt uninstall`
@@ -183,6 +188,10 @@ into other tools or building custom workflows.
 ```
 rtt index .
 rtt index /path/to/repo --output context.txt
+rtt index . --no-tests
+rtt index . --include 'src/**' --include 'lib/**'
+rtt index . --exclude 'vendor/**' --exclude 'generated/**'
+rtt index . --max-tokens 50000
 ```
 
 ### `rtt compare`
@@ -276,19 +285,36 @@ count, so agents can detect a stale index without reading the whole file.
 
 **Large repos and context window limits**
 
-If the skeleton is too large for your model's context window, use `--max-tokens`
-to trim it to fit. rtt will keep non-test files with the most symbols and drop
-the rest:
+Test files are usually the biggest contributor to skeleton size. The simplest
+reduction for most projects is `--no-tests`:
+
+```
+rtt install . --no-tests    # drops test/, spec/, fixture/ files
+```
+
+On Django (3,020 files), this alone cuts the skeleton from 585k tokens to 193k.
+
+If the skeleton is still too large, use `--max-tokens` to trim it to fit.
+rtt keeps non-test files with the most symbols and drops the rest:
 
 ```
 rtt install . --max-tokens 100000    # fits in most 128k-window models
 rtt install . --max-tokens 50000     # conservative
 ```
 
+A rough guide by repo size:
+
+| Repo scale | Approach |
+|---|---|
+| < 500 files | no flag needed |
+| 500–2,000 files | `--no-tests` |
+| 2,000+ files (e.g. Django) | `--no-tests` + `--max-tokens 100000` |
+
 Or limit to specific directories:
 
 ```
-rtt install . --include 'src/**' --include 'lib/**' --exclude 'tests/**'
+rtt install . --include 'src/**' --include 'lib/**'
+rtt install . --exclude 'vendor/**' --exclude 'generated/**'
 ```
 
 ---
@@ -299,6 +325,9 @@ rtt install . --include 'src/**' --include 'lib/**' --exclude 'tests/**'
 import rtt
 
 repo = rtt.index("/path/to/repo")
+repo = rtt.index("/path/to/repo", no_tests=True)
+repo = rtt.index("/path/to/repo", max_tokens=100000)
+repo = rtt.index("/path/to/repo", include=["src/**"], exclude=["vendor/**"])
 
 print(repo.token_count)    # int
 print(repo.text)           # full skeleton as a string

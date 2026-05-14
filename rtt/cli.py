@@ -35,6 +35,8 @@ def index(
         help="Glob pattern to exclude (repeatable). e.g. --exclude 'tests/**'"),
     max_tokens: Optional[int] = typer.Option(None, "--max-tokens", "-m",
         help="Trim output to fit within this token budget, dropping low-priority files first."),
+    no_tests: bool = typer.Option(False, "--no-tests",
+        help="Exclude test/spec/fixture files."),
 ):
     """Generate a compact skeleton index of the repo and print to stdout."""
     from rtt.extractor import extract_repo
@@ -43,7 +45,8 @@ def index(
 
     with console.status("[dim]Indexing...[/dim]", spinner="dots"):
         repo = extract_repo(resolved, use_cache=not no_cache,
-                            include=include, exclude=exclude, max_tokens=max_tokens)
+                            include=include, exclude=exclude, max_tokens=max_tokens,
+                            no_tests=no_tests)
 
     text = repo.text
     tokens = repo.token_count
@@ -388,6 +391,8 @@ def install(
         help="Glob pattern to exclude (repeatable)."),
     max_tokens: Optional[int] = typer.Option(None, "--max-tokens", "-m",
         help="Trim skeleton to fit within this token budget."),
+    no_tests: bool = typer.Option(False, "--no-tests",
+        help="Exclude test/spec/fixture files from the skeleton."),
 ):
     """Index the repo and inject context instructions into agent config files.
 
@@ -414,7 +419,8 @@ def install(
 
     with console.status("[dim]Indexing repo...[/dim]", spinner="dots"):
         repo       = extract_repo(resolved, use_cache=False,
-                                  include=include, exclude=exclude, max_tokens=max_tokens)
+                                  include=include, exclude=exclude, max_tokens=max_tokens,
+                                  no_tests=no_tests)
         text       = format_text(repo)
         compressed = count_tokens(text)
 
@@ -432,6 +438,11 @@ def install(
     dropped = getattr(repo, "_dropped", 0)
     drop_note = f"  [yellow]({dropped} files excluded by --max-tokens)[/yellow]" if dropped else ""
     console.print(f"[green]Skeleton written:[/green] .rtt/context.txt  ({compressed:,} tokens){drop_note}")
+    if compressed > 100_000 and not no_tests and not max_tokens:
+        console.print(
+            f"  [dim]Tip: skeleton is large. Try [bold]--no-tests[/bold] to exclude test files, "
+            f"or [bold]--max-tokens 100000[/bold] to cap the size.[/dim]"
+        )
 
     # Inject into agent configs
     platform_names = [platform] if platform else None
@@ -477,6 +488,8 @@ def update(
         help="Glob pattern to exclude (repeatable)."),
     max_tokens: Optional[int] = typer.Option(None, "--max-tokens", "-m",
         help="Trim skeleton to fit within this token budget."),
+    no_tests: bool = typer.Option(False, "--no-tests",
+        help="Exclude test/spec/fixture files from the skeleton."),
 ):
     """Regenerate .rtt/context.txt after code changes.
 
@@ -510,7 +523,8 @@ def update(
 
     with console.status("[dim]Indexing...[/dim]", spinner="dots"):
         repo   = extract_repo(resolved, use_cache=False,
-                              include=include, exclude=exclude, max_tokens=max_tokens)
+                              include=include, exclude=exclude, max_tokens=max_tokens,
+                              no_tests=no_tests)
         text   = format_text(repo)
         tokens = count_tokens(text)
 
@@ -520,6 +534,11 @@ def update(
     dropped = getattr(repo, "_dropped", 0)
     drop_note = f"  [yellow]({dropped} files excluded)[/yellow]" if dropped else ""
     console.print(f"[green]Updated:[/green] .rtt/context.txt  ({tokens:,} tokens, {len(repo.files)} files){drop_note}")
+    if tokens > 100_000 and not no_tests and not max_tokens:
+        console.print(
+            f"  [dim]Tip: skeleton is large. Try [bold]--no-tests[/bold] to exclude test files, "
+            f"or [bold]--max-tokens 100000[/bold] to cap the size.[/dim]"
+        )
 
     if diff:
         new_symbols: set[str] = set()

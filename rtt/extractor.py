@@ -657,11 +657,9 @@ def _trim_to_budget(
     """
     from rtt.formatter import format_file_text
 
-    _TEST_MARKERS = ("test", "spec", "fixture", "mock", "__pycache__")
-
     def _priority(fi) -> int:
         path = fi.path.lower().replace(os.sep, "/")
-        is_test = any(m in path for m in _TEST_MARKERS)
+        is_test = any(m in path for m in _TEST_PATH_MARKERS)
         n_syms = sum(1 + len(s.children) for s in fi.symbols)
         return (0 if is_test else 10_000) + n_syms
 
@@ -678,12 +676,21 @@ def _trim_to_budget(
     return sorted(selected, key=lambda f: f.path), dropped
 
 
+_TEST_PATH_MARKERS = ("test", "spec", "fixture", "mock", "__pycache__")
+
+
+def _is_test_file(rel_path: str) -> bool:
+    p = rel_path.lower().replace(os.sep, "/")
+    return any(m in p for m in _TEST_PATH_MARKERS)
+
+
 def extract_repo(
     path: str,
     use_cache: bool = True,
     include: Optional[list[str]] = None,
     exclude: Optional[list[str]] = None,
     max_tokens: Optional[int] = None,
+    no_tests: bool = False,
 ) -> RepoIndex:
     """Extract a structural index of the repository.
 
@@ -696,6 +703,7 @@ def extract_repo(
                  e.g. ["tests/**", "vendor/**"]
         max_tokens: If set, trim the result to fit within this token budget,
                     prioritising non-test files with the most symbols.
+        no_tests: If True, exclude test/spec/fixture files entirely.
     """
     root = Path(path).resolve()
     cache = Cache(str(root)) if use_cache else None
@@ -713,6 +721,8 @@ def extract_repo(
                 if include and not _matches_any(rel, include):
                     continue
                 if exclude and _matches_any(rel, exclude):
+                    continue
+                if no_tests and _is_test_file(rel):
                     continue
 
                 files.append(file_index)
