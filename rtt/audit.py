@@ -64,6 +64,12 @@ SYMBOL_NODE_TYPES: dict[str, dict[str, str]] = {
         "class": "class",
         "module": "module",
     },
+    "swift": {
+        "function_declaration": "function",
+        "protocol_function_declaration": "function",
+        "class_declaration": "type",
+        "protocol_declaration": "protocol",
+    },
 }
 
 # Name field for each node type (tree-sitter field names)
@@ -82,6 +88,10 @@ _FUNCTION_BODY_TYPES: dict[str, frozenset[str]] = {
     "c":          frozenset({"function_definition"}),
     "cpp":        frozenset({"function_definition"}),
     "ruby":       frozenset({"method", "singleton_method"}),
+    "swift":      frozenset({
+        "function_declaration",
+        "protocol_function_declaration",
+    }),
 }
 
 

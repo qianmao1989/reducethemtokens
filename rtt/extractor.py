@@ -230,6 +230,13 @@ def _extract_imports(root: Node, source: bytes, lang_name: str, _lang_mod) -> li
                             if child.type == "string":
                                 add_module(text(child))
 
+        elif lang_name == "swift":
+            if t == "import_declaration":
+                for child in node.children:
+                    if child.type == "identifier":
+                        add_module(text(child))
+                        break
+
         if len(result) >= 30:
             break
 
@@ -350,24 +357,40 @@ def _node_to_symbol(node: Node, source: bytes, lang_name: str, lang_mod, depth: 
             sym = _extract_c_symbol(node, source, lang_mod)
         elif lang_name == "ruby":
             sym = _extract_ruby_symbol(node, source, lang_mod)
+        elif lang_name == "swift":
+            sym = _extract_swift_symbol(node, source, lang_mod)
     except Exception:
         return None
 
-    if sym and sym.kind == "class" and depth == 0:
+    if (
+        sym
+        and sym.kind in ("class", "struct", "enum", "protocol", "extension")
+        and depth == 0
+    ):
         # Unwrap wrapper nodes to reach the actual class definition node whose
         # "block" / "class_body" child holds the class body.
         # Handles: @dataclass class Foo  →  decorated_definition → class_definition
         #          export class Foo      →  export_statement     → class_declaration
         class_node = node
         _WRAPPER_TYPES = ("decorated_definition", "export_statement")
-        _CLASS_TYPES   = ("class_definition", "class_declaration")
+        _CLASS_TYPES   = ("class_definition", "class_declaration", "protocol_declaration")
         if node.type in _WRAPPER_TYPES:
             for child in node.children:
                 if child.type in _CLASS_TYPES:
                     class_node = child
                     break
 
-        body = _find_child_by_type(class_node, ["block", "class_body", "declaration_list", "body"])
+        body = _find_child_by_type(
+            class_node,
+            [
+                "block",
+                "class_body",
+                "enum_class_body",
+                "protocol_body",
+                "declaration_list",
+                "body",
+            ],
+        )
         if body:
             for child in body.children:
                 try:
@@ -632,6 +655,48 @@ def _extract_ruby_symbol(node: Node, source: bytes, lang_mod) -> Optional[Symbol
             return None
         name = source[name_node.start_byte:name_node.end_byte].decode()
         return Symbol(name=name, kind="module", signature=f"module {name}")
+
+    return None
+
+
+def _swift_keyword(node: Node) -> Optional[str]:
+    for child in node.children:
+        if child.type in ("class", "struct", "enum", "extension", "protocol"):
+            return child.type
+    return None
+
+
+def _extract_swift_symbol(node: Node, source: bytes, lang_mod) -> Optional[Symbol]:
+    if node.type in ("function_declaration", "protocol_function_declaration"):
+        name_node = node.child_by_field_name("name")
+        if not name_node:
+            return None
+        name = source[name_node.start_byte:name_node.end_byte].decode()
+        signature = lang_mod.declaration_signature(source, node)
+        return Symbol(name=name, kind="function", signature=signature)
+
+    if node.type == "protocol_declaration":
+        name_node = node.child_by_field_name("name")
+        if not name_node:
+            return None
+        name = source[name_node.start_byte:name_node.end_byte].decode()
+        return Symbol(
+            name=name,
+            kind="protocol",
+            signature=lang_mod.extract_class_signature(source, node),
+        )
+
+    if node.type == "class_declaration":
+        name_node = node.child_by_field_name("name")
+        if not name_node:
+            return None
+        name = source[name_node.start_byte:name_node.end_byte].decode()
+        kind = _swift_keyword(node) or "class"
+        return Symbol(
+            name=name,
+            kind=kind,
+            signature=lang_mod.extract_class_signature(source, node),
+        )
 
     return None
 
