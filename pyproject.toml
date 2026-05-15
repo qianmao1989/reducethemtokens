@@ -45,9 +45,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/yttrium400/reducethemtokens-rtt-"
-Repository = "https://github.com/yttrium400/reducethemtokens-rtt-"
-Issues = "https://github.com/yttrium400/reducethemtokens-rtt-/issues"
+Homepage = "https://github.com/yttrium400/reducethemtokens"
+Repository = "https://github.com/yttrium400/reducethemtokens"
+Issues = "https://github.com/yttrium400/reducethemtokens/issues"
 
 [project.scripts]
 rtt = "rtt.cli:app"

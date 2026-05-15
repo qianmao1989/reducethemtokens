@@ -374,8 +374,8 @@ Results are cached by file content hash. Subsequent runs on large repos are fast
 ## Development
 
 ```
-git clone https://github.com/yttrium400/reducethemtokens-rtt-
-cd reducethemtokens-rtt-
+git clone https://github.com/yttrium400/reducethemtokens
+cd reducethemtokens
 pip install -e ".[dev]"
 pytest tests/
 ```
