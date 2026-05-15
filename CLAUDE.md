@@ -68,5 +68,4 @@ Non-test files score `10_000 + n_symbols`; test files score `0 + n_symbols`. Fil
 
 ## Notes
 
-- The URLs in `pyproject.toml` still reference the old repo name (`reducethemtokens-rtt-`). Update them to `https://github.com/yttrium400/reducethemtokens` when next bumping the version.
 - `rtt/__init__.py` exposes the public Python API (`rtt.index()`, `rtt.compare()`). Keep this in sync when adding parameters to `extract_repo()`.
