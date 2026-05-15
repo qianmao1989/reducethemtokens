@@ -4,7 +4,7 @@ All notable changes to this project are documented here.
 
 ---
 
-## [0.4.1] — 2026-05-15
+## [0.4.1] - 2026-05-15
 
 ### Fixed
 - TypeScript and TSX extraction was silently returning empty results. `tree_sitter_typescript` exposes `language_typescript()` and `language_tsx()` instead of the generic `language()` used by every other language package. All `.ts` and `.tsx` files now extract correctly.
@@ -12,16 +12,16 @@ All notable changes to this project are documented here.
 
 ---
 
-## [0.4.0] — 2026-05-14
+## [0.4.0] - 2026-05-14
 
 ### Added
-- `--no-tests` flag on `rtt install`, `rtt update`, and `rtt index` — excludes test/spec/fixture files from the skeleton. On large repos like Django this alone cuts skeleton size by ~67%.
+- `--no-tests` flag on `rtt install`, `rtt update`, and `rtt index` - excludes test/spec/fixture files from the skeleton. On large repos like Django this alone cuts skeleton size by ~67%.
 - `rtt install` and `rtt update` now print a tip when the skeleton exceeds 100k tokens and no size flag was used, pointing to `--no-tests` and `--max-tokens`.
 - `rtt.index()` Python API now accepts `include`, `exclude`, `max_tokens`, and `no_tests` parameters.
 
 ---
 
-## [0.3.0] — 2026-05-13
+## [0.3.0] - 2026-05-13
 
 ### Added
 - `--include` / `--exclude` glob filtering on `rtt install`, `rtt update`, and `rtt index`. Example: `rtt install . --include 'src/**' --exclude 'vendor/**'`.
@@ -33,7 +33,7 @@ All notable changes to this project are documented here.
 
 ---
 
-## [0.2.0] — 2026-05-12
+## [0.2.0] - 2026-05-12
 
 ### Added
 - `rtt install` / `rtt uninstall`: injects orientation instructions into 9 agent config files (Claude Code, Cursor, Windsurf, Codex/OpenAI, GitHub Copilot, Kiro, Gemini CLI, Aider, Zed).
@@ -48,7 +48,7 @@ All notable changes to this project are documented here.
 
 ---
 
-## [0.1.0] — 2026-05-11
+## [0.1.0] - 2026-05-11
 
 ### Added
 - Initial release.

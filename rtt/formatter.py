@@ -4,7 +4,7 @@ from rtt import RepoIndex, FileIndex, Symbol
 
 
 def format_text(repo: RepoIndex) -> str:
-    """Compact plain-text skeleton — optimized for token efficiency."""
+    """Compact plain-text skeleton - optimized for token efficiency."""
     parts = []
     for file_index in repo.files:
         text = format_file_text(file_index)

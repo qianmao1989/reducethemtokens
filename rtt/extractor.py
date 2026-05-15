@@ -104,7 +104,7 @@ def _extract_imports(root: Node, source: bytes, lang_name: str, _lang_mod) -> li
         return source[node.start_byte:node.end_byte].decode(errors="replace")
 
     def add_named_imports(mod_name: str, names_node: Node):
-        """For 'from mod import X, Y' — emit mod.X, mod.Y entries."""
+        """For 'from mod import X, Y' - emit mod.X, mod.Y entries."""
         for child in names_node.children:
             if child.type in ("dotted_name", "identifier"):
                 sym = text(child).strip()
@@ -135,7 +135,7 @@ def _extract_imports(root: Node, source: bytes, lang_name: str, _lang_mod) -> li
                 mod = node.child_by_field_name("module_name")
                 mod_name = text(mod).strip() if mod else ""
                 if not mod_name or mod_name.startswith("."):
-                    # relative import — just store the module name if any
+                    # relative import - just store the module name if any
                     if mod_name.lstrip("."):
                         add_module(mod_name.lstrip("."))
                 else:
@@ -236,7 +236,7 @@ def _extract_imports(root: Node, source: bytes, lang_name: str, _lang_mod) -> li
     return result
 
 
-# Python nodes that are transparent containers — look inside for top-level definitions.
+# Python nodes that are transparent containers - look inside for top-level definitions.
 # Handles patterns like: try: ... def f(): ... except: ... def f(): ...
 _PY_TRANSPARENT = frozenset({
     "try_statement", "except_clause", "finally_clause",
@@ -251,7 +251,7 @@ def _iter_js_iife_body(node: Node):
         (function($) { function show() {} })(jQuery);
         !function() { function show() {} }();
     """
-    # node is expression_statement — unwrap to the expression inside
+    # node is expression_statement - unwrap to the expression inside
     expr = None
     for child in node.children:
         if child.type == "call_expression":
@@ -294,7 +294,7 @@ def _iter_toplevel_nodes(root: Node, lang_name: str):
             if child.type == "expression_statement":
                 yield from _iter_js_iife_body(child)
             elif child.type in ("statement_block", "ERROR"):
-                # Bare block statements { ... } and ERROR recovery nodes —
+                # Bare block statements { ... } and ERROR recovery nodes -
                 # both used by Django-style JS that wraps code in a top-level block
                 yield from child.children
 
@@ -697,9 +697,9 @@ def extract_repo(
     Args:
         path: Root directory to index.
         use_cache: Use per-file content-hash cache.
-        include: Glob patterns — only files matching at least one are included.
+        include: Glob patterns - only files matching at least one are included.
                  e.g. ["src/**", "lib/**", "*.py"]
-        exclude: Glob patterns — files matching any are excluded.
+        exclude: Glob patterns - files matching any are excluded.
                  e.g. ["tests/**", "vendor/**"]
         max_tokens: If set, trim the result to fit within this token budget,
                     prioritising non-test files with the most symbols.

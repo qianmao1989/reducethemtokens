@@ -115,7 +115,7 @@ def test_signature_missing_name():
 def test_signature_unbalanced_parens():
     sym = Symbol(name="fn", kind="function", signature="def fn(x: int, y: str")
     issue = _check_signature(sym, b"def fn(x: int, y: str): pass", "python")
-    assert issue is not None  # any issue caught is correct — sig is malformed
+    assert issue is not None  # any issue caught is correct - sig is malformed
 
 
 def test_signature_missing_parens():

@@ -33,7 +33,7 @@ LANGUAGE_MODULES = {
     "ruby":       "tree_sitter_ruby",
 }
 
-# Modules that don't expose a generic language() — map to their actual function name.
+# Modules that don't expose a generic language() - map to their actual function name.
 _LANGUAGE_FN = {
     "typescript": "language_typescript",
     "tsx":        "language_tsx",

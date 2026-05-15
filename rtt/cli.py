@@ -186,8 +186,8 @@ def bench(
 ):
     """Benchmark how much information the skeleton retains vs full source.
 
-    Default mode (free, instant): checks that every expected fact — parameter
-    names, return types, method lists, imports — is present in the skeleton.
+    Default mode (free, instant): checks that every expected fact - parameter
+    names, return types, method lists, imports - is present in the skeleton.
 
     --llm mode: sends sampled questions to Claude twice (full source vs skeleton)
     and uses Claude-as-judge to measure semantic equivalence.
@@ -366,7 +366,7 @@ def audit(
                 console.print(f"    [red]✗ missing:[/red] {gt.name}  [dim]({gt.kind}, line {gt.line})[/dim]")
 
             for issue in fa.signature_issues:
-                console.print(f"    [yellow]⚠ signature:[/yellow] {issue.symbol_name}  [dim]— {issue.issue}[/dim]")
+                console.print(f"    [yellow]⚠ signature:[/yellow] {issue.symbol_name}  [dim]- {issue.issue}[/dim]")
                 console.print(f"      [dim]got: {issue.signature[:80]}[/dim]")
 
         console.print()
@@ -397,7 +397,7 @@ def install(
     """Index the repo and inject context instructions into agent config files.
 
     Writes the skeleton to .rtt/context.txt, then adds a section to each
-    agent's config file instructing it to read that file at session start —
+    agent's config file instructing it to read that file at session start -
     before opening any source files.
 
     Supports: Claude Code (CLAUDE.md), Cursor (.cursor/rules/), Windsurf
@@ -494,7 +494,7 @@ def update(
     """Regenerate .rtt/context.txt after code changes.
 
     Re-indexes the repo and overwrites the skeleton file. Agent config files
-    are not touched — run this whenever the codebase changes.
+    are not touched - run this whenever the codebase changes.
     """
     from rtt.extractor import extract_repo
     from rtt.formatter import format_text, format_text_with_header
@@ -718,7 +718,7 @@ def vs(
     json_tokens   = graphify_tokens.get("graph.json", 0)
 
     console.print()
-    console.print("[bold]rtt vs graphify — Token Comparison[/bold]")
+    console.print("[bold]rtt vs graphify - Token Comparison[/bold]")
     console.print("─" * 64)
     console.print(f"  Repo:     [dim]{resolved}[/dim]")
     console.print(f"  Files:    {rtt_files}")
@@ -730,19 +730,19 @@ def vs(
     table.add_column("Notes", style="dim")
 
     table.add_row("rtt skeleton index", f"[green]{rtt_tokens:,}[/green]",
-                  "complete API surface — every signature & import")
+                  "complete API surface - every signature & import")
 
     if report_tokens:
         diff_report = (1 - rtt_tokens / report_tokens) * 100
         dir_str = f"rtt is {abs(diff_report):.0f}% {'smaller' if diff_report > 0 else 'larger'}"
         table.add_row("graphify GRAPH_REPORT.md", f"{report_tokens:,}",
-                      f"high-level summary only — {dir_str}")
+                      f"high-level summary only - {dir_str}")
 
     if json_tokens:
         diff_json = (1 - rtt_tokens / json_tokens) * 100
         dir_str2 = f"rtt is {abs(diff_json):.0f}% {'smaller' if diff_json > 0 else 'larger'}"
         table.add_row("graphify graph.json", f"{json_tokens:,}",
-                      f"full graph (impractical for LLMs) — {dir_str2}")
+                      f"full graph (impractical for LLMs) - {dir_str2}")
 
     console.print(table)
     console.print()
@@ -756,7 +756,7 @@ def vs(
         else:
             console.print(
                 f"  vs GRAPH_REPORT.md: graphify's report is {(1 - report_tokens/rtt_tokens)*100:.0f}% smaller "
-                f"[dim](high-level summary — rtt preserves complete API surface)[/dim]"
+                f"[dim](high-level summary - rtt preserves complete API surface)[/dim]"
             )
     if json_tokens and rtt_tokens < json_tokens:
         ratio = json_tokens / rtt_tokens

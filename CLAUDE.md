@@ -37,18 +37,18 @@ Three dataclasses flow through everything: `Symbol` (name, kind, signature, chil
 ### Extraction (`rtt/extractor.py`)
 `extract_repo()` is the main entry point. It walks the directory, calls `_extract_file()` per file, applies include/exclude/no_tests filters, then optionally trims to a token budget via `_trim_to_budget()`.
 
-`_extract_file()` parses with tree-sitter and delegates to language-specific functions (`_extract_python_symbol`, `_extract_js_symbol`, etc). Import extraction is separate from symbol extraction and only captures **top-level imports** — imports inside function bodies are intentionally excluded.
+`_extract_file()` parses with tree-sitter and delegates to language-specific functions (`_extract_python_symbol`, `_extract_js_symbol`, etc). Import extraction is separate from symbol extraction and only captures **top-level imports** - imports inside function bodies are intentionally excluded.
 
 ### Language modules (`rtt/languages/`)
-Each module (`python_lang.py`, `javascript_lang.py`, etc.) provides `extract_fn_signature()` and `extract_class_signature()` — functions that format a tree-sitter node into a readable signature string. Adding a new language means adding a module here, registering it in `languages/__init__.py` and `languages/registry.py`, and adding extraction logic in `extractor.py`.
+Each module (`python_lang.py`, `javascript_lang.py`, etc.) provides `extract_fn_signature()` and `extract_class_signature()` - functions that format a tree-sitter node into a readable signature string. Adding a new language means adding a module here, registering it in `languages/__init__.py` and `languages/registry.py`, and adding extraction logic in `extractor.py`.
 
 ### JS/TS edge cases
 Two patterns require special handling in `_iter_toplevel_nodes()`:
-1. **IIFE wrappers** `(function($){...})(jQuery)` — handled by `_iter_js_iife_body()`
-2. **Bare block statements** `{ function foo(){} }` — tree-sitter parses these as `ERROR` or `statement_block` nodes; children are yielded transparently
+1. **IIFE wrappers** `(function($){...})(jQuery)` - handled by `_iter_js_iife_body()`
+2. **Bare block statements** `{ function foo(){} }` - tree-sitter parses these as `ERROR` or `statement_block` nodes; children are yielded transparently
 
 ### Formatter (`rtt/formatter.py`)
-`format_text()` produces the compact skeleton. `format_text_with_header()` prepends a staleness header (timestamp, file count, token count) — this is what gets written to `.rtt/context.txt`.
+`format_text()` produces the compact skeleton. `format_text_with_header()` prepends a staleness header (timestamp, file count, token count) - this is what gets written to `.rtt/context.txt`.
 
 ### Cache (`rtt/cache.py`)
 Content-hash cache at `.rtt-cache/index.json`, keyed by absolute path + SHA-256. Always bypassed (`use_cache=False`) in `rtt install` and `rtt update`.
@@ -61,11 +61,12 @@ Non-test files score `10_000 + n_symbols`; test files score `0 + n_symbols`. Fil
 
 ## Tests
 
-- `tests/test_extractor.py` — per-language extraction, uses `_extract_file()` on inline tempfile code
-- `tests/test_accuracy.py` — heuristic bench on fixture files in `tests/fixtures/`
-- `tests/test_accuracy_controlled.py` — LLM-judge test, skipped without `ANTHROPIC_API_KEY`
-- `tests/fixtures/` — canonical multi-language samples used across test files
+- `tests/test_extractor.py` - per-language extraction, uses `_extract_file()` on inline tempfile code
+- `tests/test_accuracy.py` - heuristic bench on fixture files in `tests/fixtures/`
+- `tests/test_accuracy_controlled.py` - LLM-judge test, skipped without `ANTHROPIC_API_KEY`
+- `tests/fixtures/` - canonical multi-language samples used across test files
 
 ## Notes
 
 - `rtt/__init__.py` exposes the public Python API (`rtt.index()`, `rtt.compare()`). Keep this in sync when adding parameters to `extract_repo()`.
+- Never use em dashes (the - character) in any file in this repo - use a regular hyphen instead.

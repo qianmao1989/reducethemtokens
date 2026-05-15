@@ -1,18 +1,18 @@
 """
-Agent workflow test — measures whether the skeleton prevents unnecessary file reads.
+Agent workflow test - measures whether the skeleton prevents unnecessary file reads.
 
 Core metric: does the agent request a file read (stop_reason="tool_use") or answer
 directly from context (stop_reason="end_turn")?
 
 Design: ONE API call per question per condition. No tool execution, no agentic loops,
 no accumulating message history. The tool is declared so the model can call it if it
-wants — but we only check whether it chose to, not execute it.
+wants - but we only check whether it chose to, not execute it.
 
 Total API calls: len(QUESTIONS) * 2 + 1 judge call = ~13 calls, ~$0.02.
 
 Two conditions:
-  A. No skeleton — agent has only the question
-  B. With skeleton — agent has the rtt skeleton + question
+  A. No skeleton - agent has only the question
+  B. With skeleton - agent has the rtt skeleton + question
 
 Pass criteria:
   - Structural questions: agent should NOT request file reads when it has the skeleton
@@ -38,14 +38,14 @@ pytestmark = pytest.mark.skipif(
 REPO = "/Users/swastiklohchab/Desktop/Ventriko"
 
 QUESTIONS = [
-    # structural — skeleton has the full answer; agent should not need files
+    # structural - skeleton has the full answer; agent should not need files
     {"q": "What API routes exist under src/app/api/admin/?",                                    "kind": "structural"},
     {"q": "Which files import from auth.authOptions?",                                          "kind": "structural"},
     {"q": "What functions are exported from src/app/api/_disabled/keys/route.ts?",              "kind": "structural"},
-    # navigation — skeleton helps find the right file; agent may still open it
+    # navigation - skeleton helps find the right file; agent may still open it
     {"q": "I want to add a new admin API endpoint. Which existing file should I model it on?",  "kind": "navigation"},
     {"q": "Where is email queuing handled? Which file should I look at to add a new email type?","kind": "navigation"},
-    # implementation — must read source; skeleton cannot help
+    # implementation - must read source; skeleton cannot help
     {"q": "How exactly does the POST handler in the admin migrate route work?",                  "kind": "implementation"},
     {"q": "What does the emailQueue do when POST is called on process-emails?",                  "kind": "implementation"},
 ]
@@ -76,7 +76,7 @@ def _ask_once(client, question: str, skeleton: str | None) -> dict:
     if skeleton:
         content = (
             "I have a structural skeleton of this codebase below "
-            "(imports, signatures, class hierarchies — no function bodies). "
+            "(imports, signatures, class hierarchies - no function bodies). "
             "Use it to answer structural questions directly without reading files.\n\n"
             f"{skeleton}\n\n---\n\n{question}"
         )
@@ -158,7 +158,7 @@ def test_agent_workflow(capsys):
 
     with capsys.disabled():
         print(f"\n{'='*65}")
-        print(f"Agent workflow — Ventriko ({len(repo.files)} files, {skel_tokens:,} token skeleton)")
+        print(f"Agent workflow - Ventriko ({len(repo.files)} files, {skel_tokens:,} token skeleton)")
         print(f"One API call per question per condition. No loops.")
         print(f"{'='*65}\n")
 

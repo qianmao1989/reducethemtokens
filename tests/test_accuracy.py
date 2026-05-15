@@ -129,7 +129,7 @@ class TestPythonCore:
             os.unlink(path)
 
     def test_nested_function_not_extracted(self):
-        """Functions inside functions are implementation details — should not appear."""
+        """Functions inside functions are implementation details - should not appear."""
         path = write_temp("""
             def outer(x: int) -> int:
                 def inner(y: int) -> int:
@@ -647,7 +647,7 @@ class TestEdgeCases:
             os.unlink(path)
 
     def test_deeply_nested_class_methods(self):
-        """Class with many methods at one level deep — all should be found."""
+        """Class with many methods at one level deep - all should be found."""
         methods = "\n".join(
             f"    def method_{i}(self, x: int) -> int:\n        return x + {i}"
             for i in range(10)
@@ -674,7 +674,7 @@ class TestEdgeCases:
                 os.unlink(path)
 
     def test_syntax_error_doesnt_crash(self):
-        """Files with syntax errors should not raise — tree-sitter is error-tolerant."""
+        """Files with syntax errors should not raise - tree-sitter is error-tolerant."""
         path = write_temp("""
             def broken(
             class also_broken
@@ -683,7 +683,7 @@ class TestEdgeCases:
         """, ".py")
         try:
             fi = _extract_file(path)
-            # Should not raise — tree-sitter parses partial results
+            # Should not raise - tree-sitter parses partial results
         finally:
             os.unlink(path)
 
@@ -699,7 +699,7 @@ class TestEdgeCases:
         try:
             fi = _extract_file(path)
             assert fi is not None
-            # Should not crash — may or may not extract depending on tree-sitter
+            # Should not crash - may or may not extract depending on tree-sitter
         finally:
             os.unlink(path)
 
@@ -734,7 +734,7 @@ class TestEdgeCases:
 class TestRepoAudit:
 
     def test_fixtures_dir_100_percent(self, tmp_path):
-        """Audit a repo containing all fixture files — expect 100% coverage."""
+        """Audit a repo containing all fixture files - expect 100% coverage."""
         import shutil
         for f in FIXTURES.iterdir():
             if f.is_file():
@@ -750,7 +750,7 @@ class TestRepoAudit:
                 for m in fa.missing:
                     details.append(f"{fa.path}: missing {m.name} ({m.kind}, line {m.line})")
                 for si in fa.signature_issues:
-                    details.append(f"{fa.path}: sig issue {si.symbol_name} — {si.issue}")
+                    details.append(f"{fa.path}: sig issue {si.symbol_name} - {si.issue}")
             pytest.fail("Audit issues found:\n" + "\n".join(details))
 
     def test_self_audit_100_percent(self):

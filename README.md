@@ -1,4 +1,4 @@
-# rtt — reducethemtokens
+# rtt - reducethemtokens
 
 [![PyPI](https://img.shields.io/pypi/v/reducethemtokens)](https://pypi.org/project/reducethemtokens/)
 [![Python](https://img.shields.io/pypi/pyversions/reducethemtokens)](https://pypi.org/project/reducethemtokens/)
@@ -9,7 +9,7 @@ Give any LLM a complete map of your codebase in a single, cheap read.
 ![rtt demo](demo.gif)
 
 `rtt` extracts every file's imports, function signatures, class hierarchies, and method
-lists into a compact plain-text skeleton — typically 90% smaller than the raw source —
+lists into a compact plain-text skeleton - typically 90% smaller than the raw source -
 and wires it into your agent's config so the map is available from the first message of
 every session.
 
@@ -18,7 +18,7 @@ every session.
 ## The problem it solves
 
 Modern coding agents (Cursor, Claude Code, Copilot) are good at retrieving context for
-*specific, targeted queries*. Ask about one bug, one function, one file — they find it.
+*specific, targeted queries*. Ask about one bug, one function, one file - they find it.
 
 But they struggle with the **orientation problem**: starting a session on an unfamiliar
 codebase, or asking questions that span the whole structure. Before an agent can retrieve
@@ -49,24 +49,24 @@ Every code-change task follows the same four steps:
                     without a map
 ```
 
-**Step 2 is where agents burn tokens unnecessarily.** Without a structural map, an agent scans speculatively — opening files that turn out to be wrong before landing on the right one. With rtt, step 2 becomes a single skeleton lookup: the agent sees every file's exports, imports, and signatures upfront, identifies the target directly, and skips the exploratory reads.
+**Step 2 is where agents burn tokens unnecessarily.** Without a structural map, an agent scans speculatively - opening files that turn out to be wrong before landing on the right one. With rtt, step 2 becomes a single skeleton lookup: the agent sees every file's exports, imports, and signatures upfront, identifies the target directly, and skips the exploratory reads.
 
-Step 3 always happens — the agent needs the function body to write a correct edit. rtt does not replace that.
+Step 3 always happens - the agent needs the function body to write a correct edit. rtt does not replace that.
 
 ### Measured on a real private codebase
 
-We ran the same 5 code-change navigation tasks twice on a **246-file TypeScript/Next.js** repo — once with no prior context, once with the rtt skeleton (18,149 tokens) prepended:
+We ran the same 5 code-change navigation tasks twice on a **246-file TypeScript/Next.js** repo - once with no prior context, once with the rtt skeleton (18,149 tokens) prepended:
 
 | | No skeleton | With skeleton |
 |---|---|---|
 | File reads | 16 | **7** |
 | Total tool calls | 22 | **14** |
 
-**56% fewer file reads. 36% fewer total tool calls.** Several navigation tasks were answered entirely from the skeleton — no file opened at all — while the remaining reads went directly to the right file.
+**56% fewer file reads. 36% fewer total tool calls.** Several navigation tasks were answered entirely from the skeleton - no file opened at all - while the remaining reads went directly to the right file.
 
 ### Why larger repos save more
 
-On a small 50-file repo, an agent can often guess the right file from its name alone. On a 500-file repo it cannot — the exploratory tax grows with surface area. The skeleton overhead scales linearly with file count, but the number of prevented speculative reads grows faster. A rough model:
+On a small 50-file repo, an agent can often guess the right file from its name alone. On a 500-file repo it cannot - the exploratory tax grows with surface area. The skeleton overhead scales linearly with file count, but the number of prevented speculative reads grows faster. A rough model:
 
 | Repo size | Skeleton overhead | Est. reads saved per session | Break-even |
 |---|---|---|---|
@@ -74,7 +74,7 @@ On a small 50-file repo, an agent can often guess the right file from its name a
 | 250 files | ~18k tokens | 5–10 reads | first session |
 | 1,000+ files | ~60k tokens | 20+ reads | first session |
 
-Each prevented file read avoids loading that file's full source into context for the rest of the session. On TypeScript/Python files averaging 200–500 lines, that is 1,000–4,000 tokens per read. The skeleton pays for itself once it prevents 4–6 exploratory reads — which typically happens in a single task on any repo over 200 files.
+Each prevented file read avoids loading that file's full source into context for the rest of the session. On TypeScript/Python files averaging 200–500 lines, that is 1,000–4,000 tokens per read. The skeleton pays for itself once it prevents 4–6 exploratory reads - which typically happens in a single task on any repo over 200 files.
 
 ---
 
@@ -86,7 +86,7 @@ Each prevented file read avoids loading that file's full source into context for
 - The task involves cross-cutting changes across many files (a refactor, a rename, adding
   a feature that touches multiple layers)
 - You're using a chat interface (ChatGPT, Claude.ai, direct API) that has no built-in
-  retrieval — every session starts from zero
+  retrieval - every session starts from zero
 - You're building a CI pipeline, a code review bot, or any automated workflow where
   reproducible, deterministic context matters
 - You want to give an LLM repo context without setting up a vector store or any
@@ -94,7 +94,7 @@ Each prevented file read avoids loading that file's full source into context for
 
 **rtt is less useful when:**
 
-- You're asking about one specific file or function — just open it
+- You're asking about one specific file or function - just open it
 - Your agent already has full retrieval and you're working on targeted, well-scoped tasks
 
 ---
@@ -117,14 +117,14 @@ rtt install .
 ```
 
 This writes `.rtt/context.txt` (the skeleton) and adds a short instruction to every
-supported agent config file — `CLAUDE.md`, `AGENTS.md`, `.cursor/rules/`, and others.
+supported agent config file - `CLAUDE.md`, `AGENTS.md`, `.cursor/rules/`, and others.
 The instruction tells the agent to read the skeleton at session start for orientation,
 then work normally from there.
 
 Commit both files. Every collaborator and every future session gets the map automatically.
 
 ```
-# After code changes — regenerate the skeleton
+# After code changes - regenerate the skeleton
 rtt update .
 
 # See how many tokens the skeleton saves vs raw source
@@ -150,7 +150,7 @@ def run_bench(path: str, use_llm: bool, llm_sample: int) -> BenchReport
 
 ---
 
-## Benchmark — Django (3,020 files)
+## Benchmark - Django (3,020 files)
 
 | Metric | Value |
 |---|---|
@@ -161,13 +161,13 @@ def run_bench(path: str, use_llm: bool, llm_sample: int) -> BenchReport
 | Audit coverage (Python) | **99.9%** (34,454 / 34,480 symbols) |
 | Audit coverage (JavaScript) | **97.9%** (46 / 47 symbols) |
 
-The heuristic bench auto-generates factual questions from the index — parameter names,
-return types, method lists, imports — and verifies every answer appears in the skeleton.
+The heuristic bench auto-generates factual questions from the index - parameter names,
+return types, method lists, imports - and verifies every answer appears in the skeleton.
 100% means no structural information was lost in compression.
 
 A separate controlled accuracy test asks Claude structural questions about code, once
 with full source and once with the skeleton, then uses Claude-as-judge to verify
-correctness. The skeleton scores **90%** on this test — matching the full source on
+correctness. The skeleton scores **90%** on this test - matching the full source on
 every question except those involving imports defined inside function bodies (a
 structural limitation: rtt only captures top-level imports by design).
 

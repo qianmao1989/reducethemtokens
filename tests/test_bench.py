@@ -1,4 +1,4 @@
-"""Tests for the benchmark module — heuristic scoring only (no LLM calls)."""
+"""Tests for the benchmark module - heuristic scoring only (no LLM calls)."""
 import textwrap
 import tempfile
 import os
@@ -101,7 +101,7 @@ class TestReturnType:
         assert _return_type("def fn(x: int)") is None
 
     def test_go_style_post_paren(self):
-        # Go functions don't use -> — return type follows closing paren
+        # Go functions don't use -> - return type follows closing paren
         assert _return_type("func Start() error") == "error"
         assert _return_type("func NewServer(config Config) *Server") == "Server"
 

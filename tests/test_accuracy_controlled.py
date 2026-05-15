@@ -7,7 +7,7 @@ This test uses the Anthropic API to ask the same 20 structural questions twice:
   - once with the rtt skeleton as context
 
 A third Claude call judges whether both answers are factually correct against the
-ground truth (the full source). This is a stricter test than the LLM bench — it
+ground truth (the full source). This is a stricter test than the LLM bench - it
 measures correctness against ground truth, not just equivalence between two answers.
 
 Run with:
@@ -25,7 +25,7 @@ import pytest
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 pytestmark = pytest.mark.skipif(
     not ANTHROPIC_API_KEY,
-    reason="ANTHROPIC_API_KEY not set — skipping controlled accuracy test",
+    reason="ANTHROPIC_API_KEY not set - skipping controlled accuracy test",
 )
 
 # ── test repo ─────────────────────────────────────────────────────────────────
@@ -147,7 +147,7 @@ def _judge(client, question: str, ground_truth_answer: str, test_answer: str) ->
             f"Correct answer (from full source): {ground_truth_answer}\n\n"
             f"Answer under test: {test_answer}\n\n"
             "Is the answer under test factually correct relative to the correct answer? "
-            "Judge only on accuracy of what is stated, not on completeness — the answer under test "
+            "Judge only on accuracy of what is stated, not on completeness - the answer under test "
             "comes from a structural skeleton that intentionally omits function bodies. "
             "Ignore style differences. Reply CORRECT or INCORRECT on line 1, then one sentence."
         )}],
@@ -193,7 +193,7 @@ def test_skeleton_correctness(tmp_path, capsys):
 
     # Print detailed results
     print(f"\n{'='*70}")
-    print(f"Controlled accuracy test — {len(QUESTIONS)} questions")
+    print(f"Controlled accuracy test - {len(QUESTIONS)} questions")
     print(f"{'='*70}")
     for filename, q, full_ans, skel_ans, ok, reason in results:
         status = "PASS" if ok else "FAIL"

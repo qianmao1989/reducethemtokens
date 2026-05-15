@@ -174,7 +174,7 @@ def generate_questions(repo: RepoIndex) -> list[BenchQuestion]:
 
     for fi in repo.files:
 
-        # Imports question — requires at least 2 imports to be meaningful
+        # Imports question - requires at least 2 imports to be meaningful
         if len(fi.imports) >= 2:
             questions.append(BenchQuestion(
                 kind="imports",

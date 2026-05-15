@@ -69,7 +69,7 @@ SYMBOL_NODE_TYPES: dict[str, dict[str, str]] = {
 # Name field for each node type (tree-sitter field names)
 NAME_FIELDS = ["name", "declarator"]
 
-# Stop recursing into these nodes — their bodies contain nested implementation details,
+# Stop recursing into these nodes - their bodies contain nested implementation details,
 # not public symbols. Mirrors rtt's own extraction boundary.
 _FUNCTION_BODY_TYPES: dict[str, frozenset[str]] = {
     "python":     frozenset({"function_definition"}),
@@ -231,7 +231,7 @@ def _check_signature(sym: Symbol, source: bytes, lang: str) -> Optional[Signatur
     if is_callable:
         if "(" not in sig or ")" not in sig:
             return SignatureIssue(sym.name, sym.kind, sig,
-                                  "parentheses missing — parameters not captured")
+                                  "parentheses missing - parameters not captured")
 
         open_idx = sig.index("(")
         close_idx = sig.rindex(")")
@@ -242,7 +242,7 @@ def _check_signature(sym: Symbol, source: bytes, lang: str) -> Optional[Signatur
         # Check for truncation: signature ends mid-token (no closing bracket at all)
         if sig.count("(") != sig.count(")"):
             return SignatureIssue(sym.name, sym.kind, sig,
-                                  "unbalanced parentheses — likely truncated")
+                                  "unbalanced parentheses - likely truncated")
 
     # Check that return type annotation is present when source has one
     if lang == "python" and "->" in source.decode(errors="replace"):
