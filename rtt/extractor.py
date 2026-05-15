@@ -158,7 +158,7 @@ def _extract_imports(root: Node, source: bytes, lang_name: str, _lang_mod) -> li
                     if not names_added and mod_name:
                         add_module(mod_name)
 
-        elif lang_name in ("javascript", "typescript"):
+        elif lang_name in ("javascript", "typescript", "tsx"):
             if t == "import_statement":
                 src = node.child_by_field_name("source")
                 if not src:
@@ -290,7 +290,7 @@ def _iter_toplevel_nodes(root: Node, lang_name: str):
         yield child
         if lang_name == "python" and child.type in _PY_TRANSPARENT:
             yield from _iter_inside_transparent(child, depth=0)
-        elif lang_name in ("javascript", "typescript"):
+        elif lang_name in ("javascript", "typescript", "tsx"):
             if child.type == "expression_statement":
                 yield from _iter_js_iife_body(child)
             elif child.type in ("statement_block", "ERROR"):
@@ -338,7 +338,7 @@ def _node_to_symbol(node: Node, source: bytes, lang_name: str, lang_mod, depth: 
     try:
         if lang_name == "python":
             sym = _extract_python_symbol(node, source, lang_mod)
-        elif lang_name in ("javascript", "typescript"):
+        elif lang_name in ("javascript", "typescript", "tsx"):
             sym = _extract_js_symbol(node, source, lang_mod, lang_name)
         elif lang_name == "go":
             sym = _extract_go_symbol(node, source, lang_mod)

@@ -15,6 +15,7 @@ LANG_MODULES = {
     "python": python_lang,
     "javascript": javascript_lang,
     "typescript": typescript_lang,
+    "tsx": typescript_lang,
     "go": go_lang,
     "rust": rust_lang,
     "java": java_lang,

@@ -26,6 +26,12 @@ SYMBOL_NODE_TYPES: dict[str, dict[str, str]] = {
         "method_definition": "method",
         "interface_declaration": "interface",
     },
+    "tsx": {
+        "function_declaration": "function",
+        "class_declaration": "class",
+        "method_definition": "method",
+        "interface_declaration": "interface",
+    },
     "go": {
         "function_declaration": "function",
         "method_declaration": "method",
@@ -69,6 +75,7 @@ _FUNCTION_BODY_TYPES: dict[str, frozenset[str]] = {
     "python":     frozenset({"function_definition"}),
     "javascript": frozenset({"function_declaration", "function_expression", "arrow_function", "method_definition"}),
     "typescript": frozenset({"function_declaration", "function_expression", "arrow_function", "method_definition"}),
+    "tsx":        frozenset({"function_declaration", "function_expression", "arrow_function", "method_definition"}),
     "go":         frozenset({"function_declaration", "method_declaration", "func_literal"}),
     "rust":       frozenset({"function_item"}),
     "java":       frozenset({"method_declaration", "constructor_declaration"}),
