@@ -4,6 +4,14 @@ All notable changes to this project are documented here.
 
 ---
 
+## [0.4.1] — 2026-05-15
+
+### Fixed
+- TypeScript and TSX extraction was silently returning empty results. `tree_sitter_typescript` exposes `language_typescript()` and `language_tsx()` instead of the generic `language()` used by every other language package. All `.ts` and `.tsx` files now extract correctly.
+- `.tsx` files are now treated as their own `tsx` language variant (using `language_tsx()`), separate from `.ts` files.
+
+---
+
 ## [0.4.0] — 2026-05-14
 
 ### Added

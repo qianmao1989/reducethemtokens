@@ -36,6 +36,48 @@ accurate by giving the agent the right mental model before it starts searching.
 
 ---
 
+## Where agents save tokens
+
+Every code-change task follows the same four steps:
+
+```
+ 1. Task arrives       2. Navigate          3. Read              4. Write
+ "add a rate-limit  →  find the right    →  open that file   →  make the edit
+  endpoint"            file to edit         in full
+                          ↑
+                    tokens wasted here
+                    without a map
+```
+
+**Step 2 is where agents burn tokens unnecessarily.** Without a structural map, an agent scans speculatively — opening files that turn out to be wrong before landing on the right one. With rtt, step 2 becomes a single skeleton lookup: the agent sees every file's exports, imports, and signatures upfront, identifies the target directly, and skips the exploratory reads.
+
+Step 3 always happens — the agent needs the function body to write a correct edit. rtt does not replace that.
+
+### Measured on a real private codebase
+
+We ran the same 5 code-change navigation tasks twice on a **246-file TypeScript/Next.js** repo — once with no prior context, once with the rtt skeleton (18,149 tokens) prepended:
+
+| | No skeleton | With skeleton |
+|---|---|---|
+| File reads | 16 | **7** |
+| Total tool calls | 22 | **14** |
+
+**56% fewer file reads. 36% fewer total tool calls.** Several navigation tasks were answered entirely from the skeleton — no file opened at all — while the remaining reads went directly to the right file.
+
+### Why larger repos save more
+
+On a small 50-file repo, an agent can often guess the right file from its name alone. On a 500-file repo it cannot — the exploratory tax grows with surface area. The skeleton overhead scales linearly with file count, but the number of prevented speculative reads grows faster. A rough model:
+
+| Repo size | Skeleton overhead | Est. reads saved per session | Break-even |
+|---|---|---|---|
+| 50 files | ~2k tokens | 1–2 reads | immediate |
+| 250 files | ~18k tokens | 5–10 reads | first session |
+| 1,000+ files | ~60k tokens | 20+ reads | first session |
+
+Each prevented file read avoids loading that file's full source into context for the rest of the session. On TypeScript/Python files averaging 200–500 lines, that is 1,000–4,000 tokens per read. The skeleton pays for itself once it prevents 4–6 exploratory reads — which typically happens in a single task on any repo over 200 files.
+
+---
+
 ## When to use it
 
 **Use rtt when:**
