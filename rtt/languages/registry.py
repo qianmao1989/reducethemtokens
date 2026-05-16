@@ -23,7 +23,6 @@ EXTENSION_MAP = {
     ".swift": "swift",
     ".lua": "lua",
     ".cs": "csharp",
-    ".lua": "lua",
     ".php": "php",
 }
 
@@ -42,7 +41,6 @@ LANGUAGE_MODULES = {
     "swift":      "tree_sitter_swift",
     "lua":        "tree_sitter_lua",
     "csharp":     "tree_sitter_c_sharp",
-    "lua":        "tree_sitter_lua",
     "php":        "tree_sitter_php",
 }
 
