@@ -1072,13 +1072,30 @@ def _extract_dart_symbol(node: Node, source: bytes, lang_mod) -> Optional[Symbol
         sig = source[node.start_byte:node.end_byte].decode().strip()
         return Symbol(name=name, kind="function", signature=sig)
 
+    # getter_signature (Dart getters like `String get name`)
+    if t == "getter_signature":
+        name_node = node.child_by_field_name("name")
+        if not name_node:
+            for child in node.children:
+                if child.type == "identifier":
+                    name_node = child
+                    break
+        if not name_node:
+            return None
+        name = source[name_node.start_byte:name_node.end_byte].decode()
+        sig = source[node.start_byte:node.end_byte].decode().strip()
+        return Symbol(name=name, kind="property", signature=sig)
+
     # declaration (abstract methods, constructors, class members)
     if t == "declaration":
         # For class members, the name is on the inner function_signature/getter_signature
+        inner_kind = "function"
         name_node = node.child_by_field_name("name")
         if not name_node:
             for child in node.children:
                 if child.type in ("function_signature", "getter_signature", "method_signature"):
+                    if child.type == "getter_signature":
+                        inner_kind = "property"
                     name_node = child.child_by_field_name("name")
                     if name_node:
                         break
@@ -1096,7 +1113,7 @@ def _extract_dart_symbol(node: Node, source: bytes, lang_mod) -> Optional[Symbol
                 end_byte = child.start_byte
                 break
         sig = source[node.start_byte:end_byte].decode().strip()
-        return Symbol(name=name, kind="function", signature=sig)
+        return Symbol(name=name, kind=inner_kind, signature=sig)
 
     # class_definition, mixin_declaration, enum_declaration, extension_declaration
     if t in ("class_definition", "mixin_declaration", "enum_declaration", "extension_declaration"):
