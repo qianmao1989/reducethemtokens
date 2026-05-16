@@ -254,6 +254,36 @@ def _extract_imports(root: Node, source: bytes, lang_name: str, _lang_mod) -> li
                         add(text(child).strip())
                         break
 
+        elif lang_name == "lua":
+            def _extract_lua_require(fc_node):
+                fn_id = None
+                for ch in fc_node.children:
+                    if ch.type == "identifier" and text(ch) == "require":
+                        fn_id = ch
+                        break
+                if not fn_id:
+                    return
+                args = fc_node.child_by_field_name("arguments")
+                if not args:
+                    return
+                for arg in args.children:
+                    if arg.type == "string":
+                        for sc in arg.children:
+                            if sc.type == "string_content":
+                                add_module(text(sc))
+                                return
+
+            if t == "variable_declaration":
+                for child in node.children:
+                    if child.type == "assignment_statement":
+                        for sub in child.children:
+                            if sub.type == "expression_list":
+                                for expr in sub.children:
+                                    if expr.type == "function_call":
+                                        _extract_lua_require(expr)
+            elif t == "function_call":
+                _extract_lua_require(node)
+
         if len(result) >= 30:
             break
 
@@ -385,6 +415,8 @@ def _node_to_symbol(node: Node, source: bytes, lang_name: str, lang_mod, depth: 
             sym = _extract_swift_symbol(node, source, lang_mod)
         elif lang_name == "csharp":
             sym = _extract_csharp_symbol(node, source, lang_mod)
+        elif lang_name == "lua":
+            sym = _extract_lua_symbol(node, source, lang_mod)
     except Exception:
         return None
 
@@ -944,3 +976,47 @@ def compare_repo(path: str) -> CompareReport:
         file_count=len(repo_index.files),
         per_file=sorted(per_file, key=lambda x: x["raw"], reverse=True),
     )
+
+
+def _extract_lua_symbol(node: Node, source: bytes, lang_mod) -> Optional[Symbol]:
+    # function M.greet(name) or function M:add(a, b)
+    if node.type == "function_declaration":
+        is_local = any(child.type == "local" for child in node.children)
+        name_node = None
+        for child in node.children:
+            if child.type in ("identifier", "dot_index_expression", "method_index_expression"):
+                name_node = child
+                break
+        if not name_node:
+            return None
+        name = source[name_node.start_byte:name_node.end_byte].decode()
+        params_node = node.child_by_field_name("parameters")
+        params = source[params_node.start_byte:params_node.end_byte].decode() if params_node else "()"
+        if is_local:
+            return Symbol(name=name, kind="function", signature=f"local function {name}{params}")
+        return Symbol(name=name, kind="function", signature=f"function {name}{params}")
+
+    # local M = {} — treat as table/class
+    if node.type == "variable_declaration":
+        for child in node.children:
+            if child.type == "assignment_statement":
+                var_list = None
+                expr_list = None
+                for sub in child.children:
+                    if sub.type == "variable_list":
+                        var_list = sub
+                    elif sub.type == "expression_list":
+                        expr_list = sub
+                if var_list and expr_list:
+                    for var in var_list.children:
+                        if var.type == "identifier":
+                            for expr in expr_list.children:
+                                if expr.type == "table_constructor":
+                                    name = source[var.start_byte:var.end_byte].decode()
+                                    return Symbol(name=name, kind="table", signature=f"local {name} = {{}}")
+                                if expr.type == "anonymous_function":
+                                    name = source[var.start_byte:var.end_byte].decode()
+                                    params_node = expr.child_by_field_name("parameters")
+                                    params = source[params_node.start_byte:params_node.end_byte].decode() if params_node else "()"
+                                    return Symbol(name=name, kind="function", signature=f"local {name} = function{params}")
+    return None
