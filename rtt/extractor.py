@@ -244,6 +244,16 @@ def _extract_imports(root: Node, source: bytes, lang_name: str, _lang_mod) -> li
                         add_module(text(child))
                         break
 
+        elif lang_name == "csharp":
+            if t == "using_directive":
+                for child in node.children:
+                    if child.type == "qualified_name":
+                        add(text(child).strip())
+                        break
+                    elif child.type == "identifier":
+                        add(text(child).strip())
+                        break
+
         if len(result) >= 30:
             break
 
@@ -311,6 +321,11 @@ def _iter_toplevel_nodes(root: Node, lang_name: str):
                 # Bare block statements { ... } and ERROR recovery nodes -
                 # both used by Django-style JS that wraps code in a top-level block
                 yield from child.children
+        elif lang_name == "csharp" and child.type == "namespace_declaration":
+            # C# namespaces wrap all declarations — look inside their declaration_list
+            body = child.child_by_field_name("body")
+            if body:
+                yield from body.children
 
 
 def _iter_inside_transparent(node: Node, depth: int):
@@ -368,6 +383,8 @@ def _node_to_symbol(node: Node, source: bytes, lang_name: str, lang_mod, depth: 
             sym = _extract_ruby_symbol(node, source, lang_mod)
         elif lang_name == "swift":
             sym = _extract_swift_symbol(node, source, lang_mod)
+        elif lang_name == "csharp":
+            sym = _extract_csharp_symbol(node, source, lang_mod)
     except Exception:
         return None
 
@@ -705,6 +722,58 @@ def _swift_keyword(node: Node) -> Optional[str]:
     for child in node.children:
         if child.type in ("class", "struct", "enum", "extension", "protocol"):
             return child.type
+    return None
+
+
+def _extract_csharp_symbol(node: Node, source: bytes, lang_mod) -> Optional[Symbol]:
+    if node.type == "class_declaration":
+        name_node = node.child_by_field_name("name")
+        if not name_node:
+            return None
+        name = source[name_node.start_byte:name_node.end_byte].decode()
+        return Symbol(name=name, kind="class", signature=f"class {name}")
+
+    if node.type == "method_declaration":
+        name_node = node.child_by_field_name("name")
+        params_node = node.child_by_field_name("parameters")
+        type_node = node.child_by_field_name("type")
+        if not name_node:
+            return None
+        name = source[name_node.start_byte:name_node.end_byte].decode()
+        params = source[params_node.start_byte:params_node.end_byte].decode() if params_node else "()"
+        ret = source[type_node.start_byte:type_node.end_byte].decode() if type_node else "void"
+        return Symbol(name=name, kind="method", signature=f"{ret} {name}{params}")
+
+    if node.type == "interface_declaration":
+        name_node = node.child_by_field_name("name")
+        if not name_node:
+            return None
+        name = source[name_node.start_byte:name_node.end_byte].decode()
+        return Symbol(name=name, kind="interface", signature=f"interface {name}")
+
+    if node.type == "struct_declaration":
+        name_node = node.child_by_field_name("name")
+        if not name_node:
+            return None
+        name = source[name_node.start_byte:name_node.end_byte].decode()
+        return Symbol(name=name, kind="struct", signature=f"struct {name}")
+
+    if node.type == "enum_declaration":
+        name_node = node.child_by_field_name("name")
+        if not name_node:
+            return None
+        name = source[name_node.start_byte:name_node.end_byte].decode()
+        return Symbol(name=name, kind="enum", signature=f"enum {name}")
+
+    if node.type == "property_declaration":
+        name_node = node.child_by_field_name("name")
+        type_node = node.child_by_field_name("type")
+        if not name_node:
+            return None
+        name = source[name_node.start_byte:name_node.end_byte].decode()
+        prop_type = source[type_node.start_byte:type_node.end_byte].decode() if type_node else "object"
+        return Symbol(name=name, kind="property", signature=f"{prop_type} {name}")
+
     return None
 
 
