@@ -440,7 +440,7 @@ def _node_to_symbol(node: Node, source: bytes, lang_name: str, lang_mod, depth: 
 
     if (
         sym
-        and sym.kind in ("class", "struct", "enum", "protocol", "extension", "interface", "object")
+        and sym.kind in ("class", "struct", "enum", "protocol", "extension", "interface", "object", "trait")
         and depth == 0
     ):
         # Unwrap wrapper nodes to reach the actual class definition node whose
@@ -449,7 +449,7 @@ def _node_to_symbol(node: Node, source: bytes, lang_name: str, lang_mod, depth: 
         #          export class Foo      ->  export_statement     -> class_declaration
         class_node = node
         _WRAPPER_TYPES = ("decorated_definition", "export_statement")
-        _CLASS_TYPES   = ("class_definition", "class_declaration", "protocol_declaration", "object_declaration")
+        _CLASS_TYPES   = ("class_definition", "class_declaration", "protocol_declaration", "object_declaration", "trait_declaration")
         if node.type in _WRAPPER_TYPES:
             for child in node.children:
                 if child.type in _CLASS_TYPES:
