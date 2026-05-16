@@ -18,6 +18,7 @@ EXTENSION_MAP = {
     ".cxx": "cpp",
     ".hpp": "cpp",
     ".rb": "ruby",
+    ".swift": "swift",
 }
 
 LANGUAGE_MODULES = {
@@ -31,6 +32,7 @@ LANGUAGE_MODULES = {
     "c":          "tree_sitter_c",
     "cpp":        "tree_sitter_cpp",
     "ruby":       "tree_sitter_ruby",
+    "swift":      "tree_sitter_swift",
 }
 
 # Modules that don't expose a generic language() - map to their actual function name.
