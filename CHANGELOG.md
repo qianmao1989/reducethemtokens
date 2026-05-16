@@ -4,7 +4,7 @@ All notable changes to this project are documented here.
 
 ---
 
-## [Unreleased]
+## [0.5.0] - 2026-05-16
 
 ### Added
 - Swift language support (`.swift`) - functions, classes, structs, protocols, enums, extensions. Contributed by @nvphungdev.
