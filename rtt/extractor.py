@@ -461,7 +461,7 @@ def _node_to_symbol(node: Node, source: bytes, lang_name: str, lang_mod, depth: 
 
     if (
         sym
-        and sym.kind in ("class", "struct", "enum", "protocol", "extension", "interface", "object", "trait", "mixin")
+        and sym.kind in ("class", "struct", "enum", "protocol", "extension", "interface", "object", "trait", "mixin", "case_class")
         and depth == 0
     ):
         # Unwrap wrapper nodes to reach the actual class definition node whose
@@ -488,6 +488,7 @@ def _node_to_symbol(node: Node, source: bytes, lang_name: str, lang_mod, depth: 
                 "body",
                 "extension_body",
                 "mixin_body",
+                "template_body",
             ],
         )
         if body:
