@@ -4,6 +4,13 @@ All notable changes to this project are documented here.
 
 ---
 
+## [0.5.2] - 2026-05-16
+
+### Added
+- C# language support (`.cs`) - classes, interfaces, structs, enums, methods, properties. Contributed by @qianmao1989.
+
+---
+
 ## [0.5.1] - 2026-05-16
 
 ### Changed
