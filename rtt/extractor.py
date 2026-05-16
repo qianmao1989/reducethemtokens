@@ -446,7 +446,7 @@ def _node_to_symbol(node: Node, source: bytes, lang_name: str, lang_mod, depth: 
 
     if (
         sym
-        and sym.kind in ("class", "struct", "enum", "protocol", "extension", "interface", "object")
+        and sym.kind in ("class", "struct", "enum", "protocol", "extension", "interface", "object", "trait", "mixin")
         and depth == 0
     ):
         # Unwrap wrapper nodes to reach the actual class definition node whose
@@ -455,7 +455,7 @@ def _node_to_symbol(node: Node, source: bytes, lang_name: str, lang_mod, depth: 
         #          export class Foo      ->  export_statement     -> class_declaration
         class_node = node
         _WRAPPER_TYPES = ("decorated_definition", "export_statement")
-        _CLASS_TYPES   = ("class_definition", "class_declaration", "protocol_declaration", "object_declaration")
+        _CLASS_TYPES   = ("class_definition", "class_declaration", "protocol_declaration", "object_declaration", "trait_declaration")
         if node.type in _WRAPPER_TYPES:
             for child in node.children:
                 if child.type in _CLASS_TYPES:
@@ -471,6 +471,8 @@ def _node_to_symbol(node: Node, source: bytes, lang_name: str, lang_mod, depth: 
                 "protocol_body",
                 "declaration_list",
                 "body",
+                "extension_body",
+                "mixin_body",
             ],
         )
         if body:
@@ -1053,6 +1055,13 @@ def _extract_dart_symbol(node: Node, source: bytes, lang_mod) -> Optional[Symbol
     if t in ("function_signature", "method_signature"):
         name_node = node.child_by_field_name("name")
         if not name_node:
+            # method_signature wraps function_signature
+            for child in node.children:
+                if child.type == "function_signature":
+                    name_node = child.child_by_field_name("name")
+                    if name_node:
+                        break
+        if not name_node:
             for child in node.children:
                 if child.type == "identifier":
                     name_node = child
@@ -1063,9 +1072,16 @@ def _extract_dart_symbol(node: Node, source: bytes, lang_mod) -> Optional[Symbol
         sig = source[node.start_byte:node.end_byte].decode().strip()
         return Symbol(name=name, kind="function", signature=sig)
 
-    # declaration (abstract methods, constructors)
+    # declaration (abstract methods, constructors, class members)
     if t == "declaration":
+        # For class members, the name is on the inner function_signature/getter_signature
         name_node = node.child_by_field_name("name")
+        if not name_node:
+            for child in node.children:
+                if child.type in ("function_signature", "getter_signature", "method_signature"):
+                    name_node = child.child_by_field_name("name")
+                    if name_node:
+                        break
         if not name_node:
             for child in node.children:
                 if child.type == "identifier":
