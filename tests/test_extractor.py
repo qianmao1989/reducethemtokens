@@ -127,7 +127,31 @@ def test_kotlin_extraction_fixture():
     assert registry.children[0].signature == "fun lookup(id: String): User?"
 
 
-def test_csharp_extraction_fixture():
+def test_lua_extraction_fixture():
+    path = Path(__file__).parent / "fixtures" / "sample.lua"
+    fi = _extract_file(str(path))
+    assert fi is not None
+    assert fi.language == "lua"
+    assert "base" in fi.imports
+    assert "utils" in fi.imports
+
+    names = [s.name for s in fi.symbols]
+    assert "M" in names
+    assert "M.greet" in names
+    assert "M:add" in names
+    assert "helper" in names
+
+    greet = next(s for s in fi.symbols if s.name == "M.greet")
+    assert greet.kind == "function"
+    assert greet.signature == "function M.greet(name)"
+
+    add = next(s for s in fi.symbols if s.name == "M:add")
+    assert add.kind == "function"
+    assert add.signature == "function M:add(a, b)"
+
+    helper = next(s for s in fi.symbols if s.name == "helper")
+    assert helper.kind == "function"
+    assert helper.signature == "local function helper()"
     path = Path(__file__).parent / "fixtures" / "sample.cs"
     fi = _extract_file(str(path))
     assert fi is not None

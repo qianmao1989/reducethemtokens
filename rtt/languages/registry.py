@@ -21,6 +21,7 @@ EXTENSION_MAP = {
     ".hpp": "cpp",
     ".rb": "ruby",
     ".swift": "swift",
+    ".lua": "lua",
     ".cs": "csharp",
 }
 
@@ -37,6 +38,7 @@ LANGUAGE_MODULES = {
     "cpp":        "tree_sitter_cpp",
     "ruby":       "tree_sitter_ruby",
     "swift":      "tree_sitter_swift",
+    "lua":        "tree_sitter_lua",
     "csharp":     "tree_sitter_c_sharp",
 }
 
