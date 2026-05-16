@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from typing import Optional
 
 from rtt import FileIndex, Symbol
 
@@ -41,7 +42,7 @@ class Cache:
             except Exception:
                 self._data = {}
 
-    def get(self, filepath: str, file_hash: str) -> FileIndex | None:
+    def get(self, filepath: str, file_hash: str) -> Optional[FileIndex]:
         entry = self._data.get(filepath)
         if entry and entry.get("hash") == file_hash:
             try:
